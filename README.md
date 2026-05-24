@@ -16,6 +16,7 @@ instead.
 - Dart SDK: `3.13.0-edge.814677061617134b666f6b5e3bcc42476911014b`
 - Target system: old-world `loongarch64`, UOS 20 class systems
 - Dynamic linker: `/lib64/ld.so.1`
+- Rebuilt: `2026-05-24`, with old-world GTK startup and `dart:ui` ABI fixes
 
 ## Install
 
@@ -46,6 +47,9 @@ export FLUTTER_GIT_URL="https://github.com/Flutter-Dart-loong64/flutter.git"
 - `flutter doctor -v` is expected to warn if Android SDK, Chrome, or network
   access are not configured on the target machine.
 - Linux desktop support is enabled for `linux-loong64`.
+- Old-world `loongarch64` and new-world `loong64` binaries are not
+  interchangeable. Use this repository only for old-world systems using
+  `/lib64/ld.so.1`.
 
 ## Patch
 
@@ -59,6 +63,4 @@ Apply it from an engine checkout root, the directory containing `build/` and
 patch -p1 < patches/oldworld-loongarch64-engine.patch
 ```
 
-The patch disables LSX/LASX-only build paths for old-world toolchains, narrows
-Clang-only warning flags, adds missing standard headers required by GCC, and
-uses static GCC runtime linkage for the engine shared libraries.
+The full bring-up and rebuild notes are in `OLDWORLD_SUPPORT.md`.

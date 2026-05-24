@@ -12,6 +12,20 @@
   - `gen_snapshot --version`
   - `flutter --version --no-version-check`
   - `flutter --no-version-check doctor -v`
+  - old-world GTK desktop app startup with `flutter-linglong-store`
+
+Rebuild notes:
+
+- Replaced the original release asset with a rebuilt SDK on `2026-05-24`.
+- Relinked `libflutter_linux_gtk.so` with old-world GCC 13.4 and binutils 2.42
+  to avoid unresolved `R_LARCH_B26` branches left by the system linker.
+- Added old-world compatibility for current `dart:ui` native entry points:
+  `NativeSemanticsFlags::initSemanticsFlags`,
+  `SemanticsUpdateBuilder::updateNode`, and
+  `PlatformConfigurationNativeApi::RequestViewFocusChange`.
+- Verified that the app no longer reports unresolved native functions,
+  `std::system_error`, or startup termination, and that the main GTK window is
+  visible on old-world UOS 20.
 
 Known environment warnings from validation:
 

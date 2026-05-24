@@ -17,3 +17,6 @@ It covers:
 - avoiding SwiftShader test dependencies on Loong64 where the bundled LLVM
   backend does not support LoongArch.
 - missing standard includes exposed by GCC.
+- static GCC runtime linkage for old-world shared libraries.
+- current `dart:ui` GTK startup ABI compatibility, including viewport metrics,
+  semantics flags, semantics updates, and view focus native entry points.

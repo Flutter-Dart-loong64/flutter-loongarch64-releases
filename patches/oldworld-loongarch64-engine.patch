@@ -59,149 +59,48 @@
    default_warning_flags += [
      "-Wno-unused-but-set-parameter",
      "-Wno-unused-but-set-variable",
---- a/flutter/third_party/libpng/BUILD.gn
-+++ b/flutter/third_party/libpng/BUILD.gn
-@@ -43,7 +43,7 @@
-     cflags_c += [ "-Wno-sign-compare" ]
-   }
+
+diff --git a/flutter/display_list/dl_builder.h b/flutter/display_list/dl_builder.h
+index 992e4eb..e884229 100644
+--- a/flutter/display_list/dl_builder.h
++++ b/flutter/display_list/dl_builder.h
+@@ -29,6 +29,10 @@ class DisplayListBuilder final : public virtual DlCanvas,
+                                  virtual DlOpReceiver,
+                                  DisplayListOpFlags {
+  public:
++  using ClipOp = DlCanvas::ClipOp;
++  using PointMode = DlCanvas::PointMode;
++  using SrcRectConstraint = DlCanvas::SrcRectConstraint;
++
+   static constexpr DlRect kMaxCullRect =
+       DlRect::MakeLTRB(-1E9F, -1E9F, 1E9F, 1E9F);
  
--  if (current_cpu == "loong64") {
-+  if (false && current_cpu == "loong64") {
-     sources += [
-       "loongarch/filter_lsx_intrinsics.c",
-       "loongarch/loongarch_lsx_init.c",
---- a/flutter/third_party/skia/BUILD.gn
-+++ b/flutter/third_party/skia/BUILD.gn
-@@ -165,7 +165,7 @@
- }
+diff --git a/flutter/display_list/dl_storage.cc b/flutter/display_list/dl_storage.cc
+index 9a36d46..3910fc2 100644
+--- a/flutter/display_list/dl_storage.cc
++++ b/flutter/display_list/dl_storage.cc
+@@ -4,6 +4,8 @@
  
- is_x86 = current_cpu == "x64" || current_cpu == "x86"
--is_loong64 = current_cpu == "loong64"
-+is_loong64 = false
+ #include "flutter/display_list/dl_storage.h"
  
- opts("hsw") {
-   enabled = is_x86
---- a/flutter/third_party/skia/third_party/libpng/BUILD.gn
-+++ b/flutter/third_party/skia/third_party/libpng/BUILD.gn
-@@ -56,7 +56,7 @@
-       ]
-     }
++#include <cstring>
++
+ namespace flutter {
  
--    if (current_cpu == "loong64") {
-+    if (false && current_cpu == "loong64") {
-       sources += [
-         "../externals/libpng/loongarch/filter_lsx_intrinsics.c",
-         "../externals/libpng/loongarch/loongarch_lsx_init.c",
---- a/flutter/third_party/skia/gn/skia/BUILD.gn
-+++ b/flutter/third_party/skia/gn/skia/BUILD.gn
-@@ -168,7 +168,6 @@
-     ldflags += [ "-m32" ]
-   } else if (current_cpu == "loong64") {
-     cflags += [
--      "-mlsx",
-       "-Wno-switch-default",
-     ]
-   }
---- a/flutter/third_party/skia/gn/core.gni
-+++ b/flutter/third_party/skia/gn/core.gni
-@@ -276,7 +276,6 @@
-   "$_src/core/SkBitmapProcState.h",
-   "$_src/core/SkBitmapProcState_matrixProcs.cpp",
-   "$_src/core/SkBitmapProcState_opts.cpp",
--  "$_src/core/SkBitmapProcState_opts_lasx.cpp",
-   "$_src/core/SkBitmapProcState_opts_ssse3.cpp",
-   "$_src/core/SkBlendMode.cpp",
-   "$_src/core/SkBlendModeBlender.cpp",
-@@ -291,7 +290,6 @@
-   "$_src/core/SkBlitRow_D32.cpp",
-   "$_src/core/SkBlitRow_opts.cpp",
-   "$_src/core/SkBlitRow_opts_hsw.cpp",
--  "$_src/core/SkBlitRow_opts_lasx.cpp",
-   "$_src/core/SkBlitter.cpp",
-   "$_src/core/SkBlitter.h",
-   "$_src/core/SkBlitter_A8.cpp",
-@@ -572,7 +570,6 @@
-   "$_src/core/SkSwizzlePriv.h",
-   "$_src/core/SkSwizzler_opts.cpp",
-   "$_src/core/SkSwizzler_opts_hsw.cpp",
--  "$_src/core/SkSwizzler_opts_lasx.cpp",
-   "$_src/core/SkSwizzler_opts_ssse3.cpp",
-   "$_src/core/SkTDynamicHash.h",
-   "$_src/core/SkTHash.h",
---- a/flutter/third_party/skia/src/core/SkOpts.cpp
-+++ b/flutter/third_party/skia/src/core/SkOpts.cpp
-@@ -60,7 +60,7 @@
-             if (SkCpu::Supports(SkCpu::SKX)) { Init_skx(); }
-         #endif
+ static constexpr inline bool is_power_of_two(int value) {
+diff --git a/flutter/fml/message_loop_task_queues.cc b/flutter/fml/message_loop_task_queues.cc
+index f32fa74..f86d9ef 100644
+--- a/flutter/fml/message_loop_task_queues.cc
++++ b/flutter/fml/message_loop_task_queues.cc
+@@ -6,6 +6,8 @@
  
--    #elif defined(SK_CPU_LOONGARCH)
-+    #elif defined(SK_CPU_LOONGARCH) && defined(SK_CPU_LSX_LEVEL)
-         #if SK_CPU_LSX_LEVEL < SK_CPU_LSX_LEVEL_LASX
-             if (SkCpu::Supports(SkCpu::LOONGARCH_ASX)) { Init_lasx(); }
-         #endif
---- a/flutter/third_party/skia/src/core/SkBitmapProcState_opts.cpp
-+++ b/flutter/third_party/skia/src/core/SkBitmapProcState_opts.cpp
-@@ -31,7 +31,7 @@
-         #if SK_CPU_SSE_LEVEL < SK_CPU_SSE_LEVEL_SSSE3
-             if (SkCpu::Supports(SkCpu::SSSE3)) { Init_BitmapProcState_ssse3(); }
-         #endif
--    #elif defined(SK_CPU_LOONGARCH)
-+    #elif defined(SK_CPU_LOONGARCH) && defined(SK_CPU_LSX_LEVEL)
-         #if SK_CPU_LSX_LEVEL < SK_CPU_LSX_LEVEL_LASX
-             if (SkCpu::Supports(SkCpu::LOONGARCH_ASX)) { Init_BitmapProcState_lasx(); }
-         #endif
---- a/flutter/third_party/skia/src/core/SkBlitRow_opts.cpp
-+++ b/flutter/third_party/skia/src/core/SkBlitRow_opts.cpp
-@@ -31,7 +31,7 @@
-         #if SK_CPU_SSE_LEVEL < SK_CPU_SSE_LEVEL_AVX2
-             if (SkCpu::Supports(SkCpu::HSW)) { Init_BlitRow_hsw(); }
-         #endif
--    #elif defined(SK_CPU_LOONGARCH)
-+    #elif defined(SK_CPU_LOONGARCH) && defined(SK_CPU_LSX_LEVEL)
-         #if SK_CPU_LSX_LEVEL < SK_CPU_LSX_LEVEL_LASX
-             if (SkCpu::Supports(SkCpu::LOONGARCH_ASX)) { Init_BlitRow_lasx(); }
-         #endif
---- a/flutter/third_party/skia/src/core/SkSwizzler_opts.cpp
-+++ b/flutter/third_party/skia/src/core/SkSwizzler_opts.cpp
-@@ -46,7 +46,7 @@
-         #if SK_CPU_SSE_LEVEL < SK_CPU_SSE_LEVEL_AVX2
-             if (SkCpu::Supports(SkCpu::HSW)) { Init_Swizzler_hsw(); }
-         #endif
--    #elif defined(SK_CPU_LOONGARCH)
-+    #elif defined(SK_CPU_LOONGARCH) && defined(SK_CPU_LSX_LEVEL)
-         #if SK_CPU_LSX_LEVEL < SK_CPU_LSX_LEVEL_LASX
-             if (SkCpu::Supports(SkCpu::LOONGARCH_ASX)) { Init_Swizzler_lasx(); }
-         #endif
-diff --git a/flutter/impeller/tools/component.gni b/flutter/impeller/tools/component.gni
-index d6fdef6..b223b38 100644
---- a/flutter/impeller/tools/component.gni
-+++ b/flutter/impeller/tools/component.gni
-@@ -36,7 +36,9 @@ template("impeller_component") {
-       if (!defined(invoker.cflags)) {
-         cflags = []
-       }
--      cflags += [ "-Wthread-safety-analysis" ]
-+      if (is_clang) {
-+        cflags += [ "-Wthread-safety-analysis" ]
-+      }
+ #include "flutter/fml/message_loop_task_queues.h"
  
-       if (!defined(invoker.cflags_objc)) {
-         cflags_objc = []
-diff --git a/flutter/impeller/geometry/point.h b/flutter/impeller/geometry/point.h
-index 2c19467..22f4000 100644
---- a/flutter/impeller/geometry/point.h
-+++ b/flutter/impeller/geometry/point.h
-@@ -224,8 +224,8 @@ struct TPoint {
-   }
- 
-   constexpr TPoint Rotate(const Radians& angle) const {
--    const auto cos_a = std::cosf(angle.radians);
--    const auto sin_a = std::sinf(angle.radians);
-+    const auto cos_a = std::cos(angle.radians);
-+    const auto sin_a = std::sin(angle.radians);
-     return {x * cos_a - y * sin_a, x * sin_a + y * cos_a};
-   }
- 
++#include <climits>
++
+ #include <algorithm>
+ #include <iostream>
+ #include <memory>
 diff --git a/flutter/impeller/display_list/aiks_dl_blend_unittests.cc b/flutter/impeller/display_list/aiks_dl_blend_unittests.cc
 index 062a61b..839a20a 100644
 --- a/flutter/impeller/display_list/aiks_dl_blend_unittests.cc
@@ -328,47 +227,49 @@ index 1637bc9..8581c63 100644
    for (size_t i = 1; i < line_count; i++) {
      proc(Solve(i / line_count));
    }
-diff --git a/flutter/fml/message_loop_task_queues.cc b/flutter/fml/message_loop_task_queues.cc
-index f32fa74..f86d9ef 100644
---- a/flutter/fml/message_loop_task_queues.cc
-+++ b/flutter/fml/message_loop_task_queues.cc
-@@ -6,6 +6,8 @@
+diff --git a/flutter/impeller/geometry/point.h b/flutter/impeller/geometry/point.h
+index 2c19467..22f4000 100644
+--- a/flutter/impeller/geometry/point.h
++++ b/flutter/impeller/geometry/point.h
+@@ -224,8 +224,8 @@ struct TPoint {
+   }
  
- #include "flutter/fml/message_loop_task_queues.h"
+   constexpr TPoint Rotate(const Radians& angle) const {
+-    const auto cos_a = std::cosf(angle.radians);
+-    const auto sin_a = std::sinf(angle.radians);
++    const auto cos_a = std::cos(angle.radians);
++    const auto sin_a = std::sin(angle.radians);
+     return {x * cos_a - y * sin_a, x * sin_a + y * cos_a};
+   }
+ 
+diff --git a/flutter/impeller/tessellator/tessellator_libtess.cc b/flutter/impeller/tessellator/tessellator_libtess.cc
+index a0b66ac..6893988 100644
+--- a/flutter/impeller/tessellator/tessellator_libtess.cc
++++ b/flutter/impeller/tessellator/tessellator_libtess.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "impeller/tessellator/tessellator_libtess.h"
  
 +#include <climits>
 +
- #include <algorithm>
- #include <iostream>
- #include <memory>
-diff --git a/flutter/display_list/dl_storage.cc b/flutter/display_list/dl_storage.cc
-index 9a36d46..3910fc2 100644
---- a/flutter/display_list/dl_storage.cc
-+++ b/flutter/display_list/dl_storage.cc
-@@ -4,6 +4,8 @@
+ #include "third_party/libtess2/Include/tesselator.h"
  
- #include "flutter/display_list/dl_storage.h"
+ namespace impeller {
+diff --git a/flutter/impeller/tools/component.gni b/flutter/impeller/tools/component.gni
+index d6fdef6..b223b38 100644
+--- a/flutter/impeller/tools/component.gni
++++ b/flutter/impeller/tools/component.gni
+@@ -36,7 +36,9 @@ template("impeller_component") {
+       if (!defined(invoker.cflags)) {
+         cflags = []
+       }
+-      cflags += [ "-Wthread-safety-analysis" ]
++      if (is_clang) {
++        cflags += [ "-Wthread-safety-analysis" ]
++      }
  
-+#include <cstring>
-+
- namespace flutter {
- 
- static constexpr inline bool is_power_of_two(int value) {
-diff --git a/flutter/display_list/dl_builder.h b/flutter/display_list/dl_builder.h
-index 992e4eb..e884229 100644
---- a/flutter/display_list/dl_builder.h
-+++ b/flutter/display_list/dl_builder.h
-@@ -29,6 +29,10 @@ class DisplayListBuilder final : public virtual DlCanvas,
-                                  virtual DlOpReceiver,
-                                  DisplayListOpFlags {
-  public:
-+  using ClipOp = DlCanvas::ClipOp;
-+  using PointMode = DlCanvas::PointMode;
-+  using SrcRectConstraint = DlCanvas::SrcRectConstraint;
-+
-   static constexpr DlRect kMaxCullRect =
-       DlRect::MakeLTRB(-1E9F, -1E9F, 1E9F, 1E9F);
- 
+       if (!defined(invoker.cflags_objc)) {
+         cflags_objc = []
 diff --git a/flutter/lib/gpu/BUILD.gn b/flutter/lib/gpu/BUILD.gn
 index 86105cb..5144665 100644
 --- a/flutter/lib/gpu/BUILD.gn
@@ -402,7 +303,7 @@ index 86105cb..5144665 100644
    if (is_win) {
      # This causes build failures in third_party dependencies on Windows.
 diff --git a/flutter/lib/ui/BUILD.gn b/flutter/lib/ui/BUILD.gn
-index 4b30edb..23eb905 100644
+index 4b30edb..518334d 100644
 --- a/flutter/lib/ui/BUILD.gn
 +++ b/flutter/lib/ui/BUILD.gn
 @@ -12,15 +12,18 @@ if (is_fuchsia) {
@@ -433,6 +334,701 @@ index 4b30edb..23eb905 100644
  
    if (is_win) {
      # This causes build failures in third_party dependencies on Windows.
+@@ -113,6 +116,8 @@ source_set("ui") {
+     "plugins/callback_cache.h",
+     "semantics/custom_accessibility_action.cc",
+     "semantics/custom_accessibility_action.h",
++    "semantics/semantics_flags.cc",
++    "semantics/semantics_flags.h",
+     "semantics/semantics_node.cc",
+     "semantics/semantics_node.h",
+     "semantics/semantics_update.cc",
+diff --git a/flutter/lib/ui/dart_ui.cc b/flutter/lib/ui/dart_ui.cc
+index d8509e3..fdcf46b 100644
+--- a/flutter/lib/ui/dart_ui.cc
++++ b/flutter/lib/ui/dart_ui.cc
+@@ -31,6 +31,7 @@
+ #include "flutter/lib/ui/painting/picture.h"
+ #include "flutter/lib/ui/painting/picture_recorder.h"
+ #include "flutter/lib/ui/painting/vertices.h"
++#include "flutter/lib/ui/semantics/semantics_flags.h"
+ #include "flutter/lib/ui/semantics/semantics_update.h"
+ #include "flutter/lib/ui/semantics/semantics_update_builder.h"
+ #include "flutter/lib/ui/semantics/string_attribute.h"
+@@ -92,13 +93,17 @@ typedef CanvasPath Path;
+   V(IsolateNameServerNatives::RemovePortNameMapping)               \
+   V(NativeStringAttribute::initLocaleStringAttribute)              \
+   V(NativeStringAttribute::initSpellOutStringAttribute)            \
++  V(NativeSemanticsFlags::initSemanticsFlags)                      \
+   V(PlatformConfigurationNativeApi::DefaultRouteName)              \
+   V(PlatformConfigurationNativeApi::ScheduleFrame)                 \
+   V(PlatformConfigurationNativeApi::EndWarmUpFrame)                \
+   V(PlatformConfigurationNativeApi::Render)                        \
+   V(PlatformConfigurationNativeApi::UpdateSemantics)               \
++  V(PlatformConfigurationNativeApi::SetApplicationLocale)          \
+   V(PlatformConfigurationNativeApi::SetNeedsReportTimings)         \
+   V(PlatformConfigurationNativeApi::SetIsolateDebugName)           \
++  V(PlatformConfigurationNativeApi::SetSemanticsTreeEnabled)       \
++  V(PlatformConfigurationNativeApi::RequestViewFocusChange)        \
+   V(PlatformConfigurationNativeApi::RequestDartPerformanceMode)    \
+   V(PlatformConfigurationNativeApi::GetPersistentIsolateData)      \
+   V(PlatformConfigurationNativeApi::ComputePlatformResolvedLocale) \
+diff --git a/flutter/lib/ui/semantics/semantics_flags.cc b/flutter/lib/ui/semantics/semantics_flags.cc
+new file mode 100644
+index 0000000..4ec5310
+--- /dev/null
++++ b/flutter/lib/ui/semantics/semantics_flags.cc
+@@ -0,0 +1,138 @@
++// Copyright 2013 The Flutter Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#include "flutter/lib/ui/semantics/semantics_flags.h"
++
++#include "flutter/lib/ui/semantics/semantics_node.h"
++#include "flutter/lib/ui/ui_dart_state.h"
++#include "third_party/tonic/dart_binding_macros.h"
++
++namespace flutter {
++namespace {
++
++enum class SemanticsTristate : int32_t {
++  kNone = 0,
++  kTrue = 1,
++  kFalse = 2,
++};
++
++enum class SemanticsCheckState : int32_t {
++  kNone = 0,
++  kTrue = 1,
++  kFalse = 2,
++  kMixed = 3,
++};
++
++int32_t Flag(SemanticsFlags flag) {
++  return static_cast<int32_t>(flag);
++}
++
++void EncodeTristate(int value,
++                    SemanticsFlags has_flag,
++                    SemanticsFlags true_flag,
++                    int32_t* flags) {
++  if (value == static_cast<int32_t>(SemanticsTristate::kNone)) {
++    return;
++  }
++  *flags |= Flag(has_flag);
++  if (value == static_cast<int32_t>(SemanticsTristate::kTrue)) {
++    *flags |= Flag(true_flag);
++  }
++}
++
++void EncodeBool(bool value, SemanticsFlags flag, int32_t* flags) {
++  if (value) {
++    *flags |= Flag(flag);
++  }
++}
++
++}  // namespace
++
++IMPLEMENT_WRAPPERTYPEINFO(ui, NativeSemanticsFlags);
++
++NativeSemanticsFlags::NativeSemanticsFlags() = default;
++
++NativeSemanticsFlags::~NativeSemanticsFlags() = default;
++
++void NativeSemanticsFlags::initSemanticsFlags(
++    Dart_Handle semantics_flags_handle,
++    int isChecked,
++    int isSelected,
++    int isEnabled,
++    int isToggled,
++    int isExpanded,
++    int isRequired,
++    int isFocused,
++    bool isButton,
++    bool isTextField,
++    bool isInMutuallyExclusiveGroup,
++    bool isHeader,
++    bool isObscured,
++    bool scopesRoute,
++    bool namesRoute,
++    bool isHidden,
++    bool isImage,
++    bool isLiveRegion,
++    bool hasImplicitScrolling,
++    bool isMultiline,
++    bool isReadOnly,
++    bool isLink,
++    bool isSlider,
++    bool isKeyboardKey,
++    bool isAccessibilityFocusBlocked) {
++  (void)isRequired;
++  (void)isAccessibilityFocusBlocked;
++  UIDartState::ThrowIfUIOperationsProhibited();
++
++  int32_t flags = 0;
++  if (isChecked != static_cast<int32_t>(SemanticsCheckState::kNone)) {
++    flags |= Flag(SemanticsFlags::kHasCheckedState);
++    if (isChecked == static_cast<int32_t>(SemanticsCheckState::kTrue)) {
++      flags |= Flag(SemanticsFlags::kIsChecked);
++    } else if (isChecked ==
++               static_cast<int32_t>(SemanticsCheckState::kMixed)) {
++      flags |= Flag(SemanticsFlags::kIsCheckStateMixed);
++    }
++  }
++  EncodeTristate(isSelected, SemanticsFlags::kHasSelectedState,
++                 SemanticsFlags::kIsSelected, &flags);
++  EncodeTristate(isEnabled, SemanticsFlags::kHasEnabledState,
++                 SemanticsFlags::kIsEnabled, &flags);
++  EncodeTristate(isToggled, SemanticsFlags::kHasToggledState,
++                 SemanticsFlags::kIsToggled, &flags);
++  EncodeTristate(isExpanded, SemanticsFlags::kHasExpandedState,
++                 SemanticsFlags::kIsExpanded, &flags);
++  if (isFocused == static_cast<int32_t>(SemanticsTristate::kTrue)) {
++    flags |= Flag(SemanticsFlags::kIsFocused);
++  }
++
++  EncodeBool(isButton, SemanticsFlags::kIsButton, &flags);
++  EncodeBool(isTextField, SemanticsFlags::kIsTextField, &flags);
++  EncodeBool(isInMutuallyExclusiveGroup,
++             SemanticsFlags::kIsInMutuallyExclusiveGroup, &flags);
++  EncodeBool(isHeader, SemanticsFlags::kIsHeader, &flags);
++  EncodeBool(isObscured, SemanticsFlags::kIsObscured, &flags);
++  EncodeBool(scopesRoute, SemanticsFlags::kScopesRoute, &flags);
++  EncodeBool(namesRoute, SemanticsFlags::kNamesRoute, &flags);
++  EncodeBool(isHidden, SemanticsFlags::kIsHidden, &flags);
++  EncodeBool(isImage, SemanticsFlags::kIsImage, &flags);
++  EncodeBool(isLiveRegion, SemanticsFlags::kIsLiveRegion, &flags);
++  EncodeBool(hasImplicitScrolling, SemanticsFlags::kHasImplicitScrolling,
++             &flags);
++  EncodeBool(isMultiline, SemanticsFlags::kIsMultiline, &flags);
++  EncodeBool(isReadOnly, SemanticsFlags::kIsReadOnly, &flags);
++  EncodeBool(isLink, SemanticsFlags::kIsLink, &flags);
++  EncodeBool(isSlider, SemanticsFlags::kIsSlider, &flags);
++  EncodeBool(isKeyboardKey, SemanticsFlags::kIsKeyboardKey, &flags);
++
++  auto native_semantics_flags = fml::MakeRefCounted<NativeSemanticsFlags>();
++  native_semantics_flags->flags_ = flags;
++  native_semantics_flags->AssociateWithDartWrapper(semantics_flags_handle);
++}
++
++int32_t NativeSemanticsFlags::GetFlags() const {
++  return flags_;
++}
++
++}  // namespace flutter
+diff --git a/flutter/lib/ui/semantics/semantics_flags.h b/flutter/lib/ui/semantics/semantics_flags.h
+new file mode 100644
+index 0000000..c157c27
+--- /dev/null
++++ b/flutter/lib/ui/semantics/semantics_flags.h
+@@ -0,0 +1,61 @@
++// Copyright 2013 The Flutter Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#ifndef FLUTTER_LIB_UI_SEMANTICS_SEMANTICS_FLAGS_H_
++#define FLUTTER_LIB_UI_SEMANTICS_SEMANTICS_FLAGS_H_
++
++#include <cstdint>
++
++#include "flutter/lib/ui/dart_wrapper.h"
++#include "third_party/tonic/dart_library_natives.h"
++
++namespace flutter {
++
++// Compatibility wrapper for newer dart:ui SemanticsFlags objects. The old-world
++// engine still stores semantics flags as the historical bitset, so this class
++// converts the structured Dart flags back into that representation.
++class NativeSemanticsFlags
++    : public RefCountedDartWrappable<NativeSemanticsFlags> {
++  DEFINE_WRAPPERTYPEINFO();
++  FML_FRIEND_MAKE_REF_COUNTED(NativeSemanticsFlags);
++
++ public:
++  ~NativeSemanticsFlags() override;
++
++  static void initSemanticsFlags(Dart_Handle semantics_flags_handle,
++                                 int isChecked,
++                                 int isSelected,
++                                 int isEnabled,
++                                 int isToggled,
++                                 int isExpanded,
++                                 int isRequired,
++                                 int isFocused,
++                                 bool isButton,
++                                 bool isTextField,
++                                 bool isInMutuallyExclusiveGroup,
++                                 bool isHeader,
++                                 bool isObscured,
++                                 bool scopesRoute,
++                                 bool namesRoute,
++                                 bool isHidden,
++                                 bool isImage,
++                                 bool isLiveRegion,
++                                 bool hasImplicitScrolling,
++                                 bool isMultiline,
++                                 bool isReadOnly,
++                                 bool isLink,
++                                 bool isSlider,
++                                 bool isKeyboardKey,
++                                 bool isAccessibilityFocusBlocked);
++
++  int32_t GetFlags() const;
++
++ private:
++  NativeSemanticsFlags();
++  int32_t flags_ = 0;
++};
++
++}  // namespace flutter
++
++#endif  // FLUTTER_LIB_UI_SEMANTICS_SEMANTICS_FLAGS_H_
+diff --git a/flutter/lib/ui/semantics/semantics_update_builder.cc b/flutter/lib/ui/semantics/semantics_update_builder.cc
+index b853d3a..eda65c1 100644
+--- a/flutter/lib/ui/semantics/semantics_update_builder.cc
++++ b/flutter/lib/ui/semantics/semantics_update_builder.cc
+@@ -7,6 +7,7 @@
+ #include <utility>
+ 
+ #include "flutter/lib/ui/floating_point.h"
++#include "flutter/lib/ui/semantics/semantics_flags.h"
+ #include "flutter/lib/ui/ui_dart_state.h"
+ #include "third_party/skia/include/core/SkScalar.h"
+ #include "third_party/tonic/converter/dart_converter.h"
+@@ -32,7 +33,7 @@ SemanticsUpdateBuilder::~SemanticsUpdateBuilder() = default;
+ 
+ void SemanticsUpdateBuilder::updateNode(
+     int id,
+-    int flags,
++    Dart_Handle flags,
+     int actions,
+     int maxValueLength,
+     int currentValueLength,
+@@ -41,6 +42,7 @@ void SemanticsUpdateBuilder::updateNode(
+     int platformViewId,
+     int scrollChildren,
+     int scrollIndex,
++    int traversalParent,
+     double scrollPosition,
+     double scrollExtentMax,
+     double scrollExtentMin,
+@@ -48,8 +50,6 @@ void SemanticsUpdateBuilder::updateNode(
+     double top,
+     double right,
+     double bottom,
+-    double elevation,
+-    double thickness,
+     std::string identifier,
+     std::string label,
+     const std::vector<NativeStringAttribute*>& labelAttributes,
+@@ -64,18 +64,39 @@ void SemanticsUpdateBuilder::updateNode(
+     std::string tooltip,
+     int textDirection,
+     const tonic::Float64List& transform,
++    const tonic::Float64List& hitTestTransform,
+     const tonic::Int32List& childrenInTraversalOrder,
+     const tonic::Int32List& childrenInHitTestOrder,
+     const tonic::Int32List& localContextActions,
+     int headingLevel,
+-    std::string linkUrl) {
++    std::string linkUrl,
++    int role,
++    const std::vector<std::string>& controlsNodes,
++    int validationResult,
++    int hitTestBehavior,
++    int inputType,
++    std::string locale,
++    std::string minValue,
++    std::string maxValue) {
++  (void)traversalParent;
++  (void)hitTestTransform;
++  (void)role;
++  (void)controlsNodes;
++  (void)validationResult;
++  (void)hitTestBehavior;
++  (void)inputType;
++  (void)locale;
++  (void)minValue;
++  (void)maxValue;
+   FML_CHECK(scrollChildren == 0 ||
+             (scrollChildren > 0 && childrenInHitTestOrder.data()))
+       << "Semantics update contained scrollChildren but did not have "
+          "childrenInHitTestOrder";
+   SemanticsNode node;
+   node.id = id;
+-  node.flags = flags;
++  auto* flags_object =
++      tonic::DartConverter<flutter::NativeSemanticsFlags*>::FromDart(flags);
++  node.flags = flags_object == nullptr ? 0 : flags_object->GetFlags();
+   node.actions = actions;
+   node.maxValueLength = maxValueLength;
+   node.currentValueLength = currentValueLength;
+@@ -89,8 +110,6 @@ void SemanticsUpdateBuilder::updateNode(
+   node.scrollExtentMin = scrollExtentMin;
+   node.rect = SkRect::MakeLTRB(SafeNarrow(left), SafeNarrow(top),
+                                SafeNarrow(right), SafeNarrow(bottom));
+-  node.elevation = elevation;
+-  node.thickness = thickness;
+   node.identifier = std::move(identifier);
+   node.label = std::move(label);
+   pushStringAttributes(node.labelAttributes, labelAttributes);
+@@ -119,10 +138,9 @@ void SemanticsUpdateBuilder::updateNode(
+   node.customAccessibilityActions = std::vector<int32_t>(
+       localContextActions.data(),
+       localContextActions.data() + localContextActions.num_elements());
+-  nodes_[id] = node;
+-
+   node.headingLevel = headingLevel;
+   node.linkUrl = std::move(linkUrl);
++  nodes_[id] = node;
+ }
+ 
+ void SemanticsUpdateBuilder::updateCustomAction(int id,
+diff --git a/flutter/lib/ui/semantics/semantics_update_builder.h b/flutter/lib/ui/semantics/semantics_update_builder.h
+index e944c25..e53b9c0 100644
+--- a/flutter/lib/ui/semantics/semantics_update_builder.h
++++ b/flutter/lib/ui/semantics/semantics_update_builder.h
+@@ -31,7 +31,7 @@ class SemanticsUpdateBuilder
+ 
+   void updateNode(
+       int id,
+-      int flags,
++      Dart_Handle flags,
+       int actions,
+       int maxValueLength,
+       int currentValueLength,
+@@ -40,6 +40,7 @@ class SemanticsUpdateBuilder
+       int platformViewId,
+       int scrollChildren,
+       int scrollIndex,
++      int traversalParent,
+       double scrollPosition,
+       double scrollExtentMax,
+       double scrollExtentMin,
+@@ -47,8 +48,6 @@ class SemanticsUpdateBuilder
+       double top,
+       double right,
+       double bottom,
+-      double elevation,
+-      double thickness,
+       std::string identifier,
+       std::string label,
+       const std::vector<NativeStringAttribute*>& labelAttributes,
+@@ -63,11 +62,20 @@ class SemanticsUpdateBuilder
+       std::string tooltip,
+       int textDirection,
+       const tonic::Float64List& transform,
++      const tonic::Float64List& hitTestTransform,
+       const tonic::Int32List& childrenInTraversalOrder,
+       const tonic::Int32List& childrenInHitTestOrder,
+       const tonic::Int32List& customAccessibilityActions,
+       int headingLevel,
+-      std::string linkUrl);
++      std::string linkUrl,
++      int role,
++      const std::vector<std::string>& controlsNodes,
++      int validationResult,
++      int hitTestBehavior,
++      int inputType,
++      std::string locale,
++      std::string minValue,
++      std::string maxValue);
+ 
+   void updateCustomAction(int id,
+                           std::string label,
+diff --git a/flutter/lib/ui/window/platform_configuration.cc b/flutter/lib/ui/window/platform_configuration.cc
+index a63d098..578df5e 100644
+--- a/flutter/lib/ui/window/platform_configuration.cc
++++ b/flutter/lib/ui/window/platform_configuration.cc
+@@ -121,6 +121,16 @@ bool PlatformConfiguration::AddView(int64_t view_id,
+           tonic::ToDart(view_metrics.physical_display_features_type),
+           tonic::ToDart(view_metrics.physical_display_features_state),
+           tonic::ToDart(view_metrics.display_id),
++          tonic::ToDart(view_metrics.physical_min_width_constraint),
++          tonic::ToDart(view_metrics.physical_max_width_constraint),
++          tonic::ToDart(view_metrics.physical_min_height_constraint),
++          tonic::ToDart(view_metrics.physical_max_height_constraint),
++          tonic::ToDart(view_metrics.physical_display_corner_radius_top_left),
++          tonic::ToDart(view_metrics.physical_display_corner_radius_top_right),
++          tonic::ToDart(
++              view_metrics.physical_display_corner_radius_bottom_right),
++          tonic::ToDart(
++              view_metrics.physical_display_corner_radius_bottom_left),
+       }));
+   return true;
+ }
+@@ -189,6 +199,16 @@ bool PlatformConfiguration::UpdateViewMetrics(
+           tonic::ToDart(view_metrics.physical_display_features_type),
+           tonic::ToDart(view_metrics.physical_display_features_state),
+           tonic::ToDart(view_metrics.display_id),
++          tonic::ToDart(view_metrics.physical_min_width_constraint),
++          tonic::ToDart(view_metrics.physical_max_width_constraint),
++          tonic::ToDart(view_metrics.physical_min_height_constraint),
++          tonic::ToDart(view_metrics.physical_max_height_constraint),
++          tonic::ToDart(view_metrics.physical_display_corner_radius_top_left),
++          tonic::ToDart(view_metrics.physical_display_corner_radius_top_right),
++          tonic::ToDart(
++              view_metrics.physical_display_corner_radius_bottom_right),
++          tonic::ToDart(
++              view_metrics.physical_display_corner_radius_bottom_left),
+       }));
+   return true;
+ }
+@@ -552,6 +572,15 @@ Dart_Handle PlatformConfigurationNativeApi::SendPortPlatformMessage(
+   return HandlePlatformMessage(dart_state, name, data_handle, response);
+ }
+ 
++void PlatformConfigurationNativeApi::RequestViewFocusChange(int64_t view_id,
++                                                            int64_t state,
++                                                            int64_t direction) {
++  (void)view_id;
++  (void)state;
++  (void)direction;
++  UIDartState::ThrowIfUIOperationsProhibited();
++}
++
+ void PlatformConfigurationNativeApi::RespondToPlatformMessage(
+     int response_id,
+     const tonic::DartByteData& data) {
+@@ -615,10 +644,27 @@ void PlatformConfigurationNativeApi::EndWarmUpFrame() {
+   UIDartState::Current()->platform_configuration()->client()->EndWarmUpFrame();
+ }
+ 
+-void PlatformConfigurationNativeApi::UpdateSemantics(SemanticsUpdate* update) {
++void PlatformConfigurationNativeApi::UpdateSemantics(int64_t view_id,
++                                                     SemanticsUpdate* update) {
+   UIDartState::ThrowIfUIOperationsProhibited();
+   UIDartState::Current()->platform_configuration()->client()->UpdateSemantics(
+-      update);
++      view_id, update);
++}
++
++void PlatformConfigurationNativeApi::SetApplicationLocale(std::string locale) {
++  UIDartState::ThrowIfUIOperationsProhibited();
++  UIDartState::Current()
++      ->platform_configuration()
++      ->client()
++      ->SetApplicationLocale(std::move(locale));
++}
++
++void PlatformConfigurationNativeApi::SetSemanticsTreeEnabled(bool enabled) {
++  UIDartState::ThrowIfUIOperationsProhibited();
++  UIDartState::Current()
++      ->platform_configuration()
++      ->client()
++      ->SetSemanticsTreeEnabled(enabled);
+ }
+ 
+ Dart_Handle PlatformConfigurationNativeApi::ComputePlatformResolvedLocale(
+diff --git a/flutter/lib/ui/window/platform_configuration.h b/flutter/lib/ui/window/platform_configuration.h
+index 6d227ce..e213494 100644
+--- a/flutter/lib/ui/window/platform_configuration.h
++++ b/flutter/lib/ui/window/platform_configuration.h
+@@ -91,9 +91,24 @@ class PlatformConfigurationClient {
+   //--------------------------------------------------------------------------
+   /// @brief      Receives an updated semantics tree from the Framework.
+   ///
++  /// @param[in] viewId The identifier of the view to update.
+   /// @param[in] update The updated semantic tree to apply.
+   ///
+-  virtual void UpdateSemantics(SemanticsUpdate* update) = 0;
++  virtual void UpdateSemantics(int64_t viewId, SemanticsUpdate* update) = 0;
++
++  //--------------------------------------------------------------------------
++  /// @brief      Framework sets the application locale
++  ///
++  /// @param[in] locale The application locale in BCP 47 format.
++  ///
++  virtual void SetApplicationLocale(std::string locale) = 0;
++
++  //--------------------------------------------------------------------------
++  /// @brief      Notifies whether Framework starts generating semantics tree.
++  ///
++  /// @param[in] enabled True if Framework starts generating semantics tree.
++  ///
++  virtual void SetSemanticsTreeEnabled(bool enabled) = 0;
+ 
+   //--------------------------------------------------------------------------
+   /// @brief      When the Flutter application has a message to send to the
+@@ -592,7 +607,11 @@ class PlatformConfigurationNativeApi {
+                      double width,
+                      double height);
+ 
+-  static void UpdateSemantics(SemanticsUpdate* update);
++  static void UpdateSemantics(int64_t viewId, SemanticsUpdate* update);
++
++  static void SetApplicationLocale(std::string locale);
++
++  static void SetSemanticsTreeEnabled(bool enabled);
+ 
+   static void SetNeedsReportTimings(bool value);
+ 
+@@ -617,6 +636,10 @@ class PlatformConfigurationNativeApi {
+ 
+   static void SendChannelUpdate(const std::string& name, bool listening);
+ 
++  static void RequestViewFocusChange(int64_t view_id,
++                                     int64_t state,
++                                     int64_t direction);
++
+   //--------------------------------------------------------------------------
+   /// @brief      Requests the Dart VM to adjusts the GC heuristics based on
+   ///             the requested `performance_mode`. Returns the old performance
+diff --git a/flutter/lib/ui/window/viewport_metrics.cc b/flutter/lib/ui/window/viewport_metrics.cc
+index 05d01c4..ea15aac 100644
+--- a/flutter/lib/ui/window/viewport_metrics.cc
++++ b/flutter/lib/ui/window/viewport_metrics.cc
+@@ -18,6 +18,10 @@ ViewportMetrics::ViewportMetrics(double p_device_pixel_ratio,
+     : device_pixel_ratio(p_device_pixel_ratio),
+       physical_width(p_physical_width),
+       physical_height(p_physical_height),
++      physical_min_width_constraint(p_physical_width),
++      physical_max_width_constraint(p_physical_width),
++      physical_min_height_constraint(p_physical_height),
++      physical_max_height_constraint(p_physical_height),
+       physical_touch_slop(p_physical_touch_slop),
+       display_id(p_display_id) {}
+ 
+@@ -45,6 +49,10 @@ ViewportMetrics::ViewportMetrics(
+     : device_pixel_ratio(p_device_pixel_ratio),
+       physical_width(p_physical_width),
+       physical_height(p_physical_height),
++      physical_min_width_constraint(p_physical_width),
++      physical_max_width_constraint(p_physical_width),
++      physical_min_height_constraint(p_physical_height),
++      physical_max_height_constraint(p_physical_height),
+       physical_padding_top(p_physical_padding_top),
+       physical_padding_right(p_physical_padding_right),
+       physical_padding_bottom(p_physical_padding_bottom),
+@@ -69,6 +77,14 @@ bool operator==(const ViewportMetrics& a, const ViewportMetrics& b) {
+   return a.device_pixel_ratio == b.device_pixel_ratio &&
+          a.physical_width == b.physical_width &&
+          a.physical_height == b.physical_height &&
++         a.physical_min_width_constraint ==
++             b.physical_min_width_constraint &&
++         a.physical_max_width_constraint ==
++             b.physical_max_width_constraint &&
++         a.physical_min_height_constraint ==
++             b.physical_min_height_constraint &&
++         a.physical_max_height_constraint ==
++             b.physical_max_height_constraint &&
+          a.physical_padding_top == b.physical_padding_top &&
+          a.physical_padding_right == b.physical_padding_right &&
+          a.physical_padding_bottom == b.physical_padding_bottom &&
+@@ -91,7 +107,15 @@ bool operator==(const ViewportMetrics& a, const ViewportMetrics& b) {
+          a.physical_display_features_type == b.physical_display_features_type &&
+          a.physical_display_features_state ==
+              b.physical_display_features_state &&
+-         a.display_id == b.display_id;
++         a.display_id == b.display_id &&
++         a.physical_display_corner_radius_top_left ==
++             b.physical_display_corner_radius_top_left &&
++         a.physical_display_corner_radius_top_right ==
++             b.physical_display_corner_radius_top_right &&
++         a.physical_display_corner_radius_bottom_right ==
++             b.physical_display_corner_radius_bottom_right &&
++         a.physical_display_corner_radius_bottom_left ==
++             b.physical_display_corner_radius_bottom_left;
+ }
+ 
+ std::ostream& operator<<(std::ostream& os, const ViewportMetrics& a) {
+diff --git a/flutter/lib/ui/window/viewport_metrics.h b/flutter/lib/ui/window/viewport_metrics.h
+index 13a0dee..b916a86 100644
+--- a/flutter/lib/ui/window/viewport_metrics.h
++++ b/flutter/lib/ui/window/viewport_metrics.h
+@@ -41,6 +41,10 @@ struct ViewportMetrics {
+   double device_pixel_ratio = 1.0;
+   double physical_width = 0;
+   double physical_height = 0;
++  double physical_min_width_constraint = 0;
++  double physical_max_width_constraint = 0;
++  double physical_min_height_constraint = 0;
++  double physical_max_height_constraint = 0;
+   double physical_padding_top = 0;
+   double physical_padding_right = 0;
+   double physical_padding_bottom = 0;
+@@ -58,6 +62,10 @@ struct ViewportMetrics {
+   std::vector<int> physical_display_features_type;
+   std::vector<int> physical_display_features_state;
+   size_t display_id = 0;
++  double physical_display_corner_radius_top_left = -1.0;
++  double physical_display_corner_radius_top_right = -1.0;
++  double physical_display_corner_radius_bottom_right = -1.0;
++  double physical_display_corner_radius_bottom_left = -1.0;
+ };
+ 
+ bool operator==(const ViewportMetrics& a, const ViewportMetrics& b);
+diff --git a/flutter/runtime/runtime_controller.cc b/flutter/runtime/runtime_controller.cc
+index 27193cd..321ef38 100644
+--- a/flutter/runtime/runtime_controller.cc
++++ b/flutter/runtime/runtime_controller.cc
+@@ -439,12 +439,24 @@ void RuntimeController::CheckIfAllViewsRendered() {
+ }
+ 
+ // |PlatformConfigurationClient|
+-void RuntimeController::UpdateSemantics(SemanticsUpdate* update) {
++void RuntimeController::UpdateSemantics(int64_t view_id,
++                                        SemanticsUpdate* update) {
+   if (platform_data_.semantics_enabled) {
+-    client_.UpdateSemantics(update->takeNodes(), update->takeActions());
++    client_.UpdateSemantics(view_id, update->takeNodes(),
++                            update->takeActions());
+   }
+ }
+ 
++// |PlatformConfigurationClient|
++void RuntimeController::SetApplicationLocale(std::string locale) {
++  client_.SetApplicationLocale(std::move(locale));
++}
++
++// |PlatformConfigurationClient|
++void RuntimeController::SetSemanticsTreeEnabled(bool enabled) {
++  client_.SetSemanticsTreeEnabled(enabled);
++}
++
+ // |PlatformConfigurationClient|
+ void RuntimeController::HandlePlatformMessage(
+     std::unique_ptr<PlatformMessage> message) {
+diff --git a/flutter/runtime/runtime_controller.h b/flutter/runtime/runtime_controller.h
+index 3ed05aa..099647b 100644
+--- a/flutter/runtime/runtime_controller.h
++++ b/flutter/runtime/runtime_controller.h
+@@ -750,7 +750,13 @@ class RuntimeController : public PlatformConfigurationClient,
+               double height) override;
+ 
+   // |PlatformConfigurationClient|
+-  void UpdateSemantics(SemanticsUpdate* update) override;
++  void UpdateSemantics(int64_t view_id, SemanticsUpdate* update) override;
++
++  // |PlatformConfigurationClient|
++  void SetApplicationLocale(std::string locale) override;
++
++  // |PlatformConfigurationClient|
++  void SetSemanticsTreeEnabled(bool enabled) override;
+ 
+   // |PlatformConfigurationClient|
+   void HandlePlatformMessage(std::unique_ptr<PlatformMessage> message) override;
+diff --git a/flutter/runtime/runtime_delegate.h b/flutter/runtime/runtime_delegate.h
+index 7c031f1..7a3aad4 100644
+--- a/flutter/runtime/runtime_delegate.h
++++ b/flutter/runtime/runtime_delegate.h
+@@ -31,9 +31,14 @@ class RuntimeDelegate {
+                       std::unique_ptr<flutter::LayerTree> layer_tree,
+                       float device_pixel_ratio) = 0;
+ 
+-  virtual void UpdateSemantics(SemanticsNodeUpdates update,
++  virtual void UpdateSemantics(int64_t view_id,
++                               SemanticsNodeUpdates update,
+                                CustomAccessibilityActionUpdates actions) = 0;
+ 
++  virtual void SetApplicationLocale(std::string locale) = 0;
++
++  virtual void SetSemanticsTreeEnabled(bool enabled) = 0;
++
+   virtual void HandlePlatformMessage(
+       std::unique_ptr<PlatformMessage> message) = 0;
+ 
 diff --git a/flutter/shell/common/BUILD.gn b/flutter/shell/common/BUILD.gn
 index ddceabb..c5284b4 100644
 --- a/flutter/shell/common/BUILD.gn
@@ -454,6 +1050,316 @@ index ddceabb..c5284b4 100644
        deps += [
          "//flutter/third_party/angle:libEGL_static",
          "//flutter/third_party/angle:libGLESv2_static",
+diff --git a/flutter/shell/common/engine.cc b/flutter/shell/common/engine.cc
+index 6cfe415..0f4abec 100644
+--- a/flutter/shell/common/engine.cc
++++ b/flutter/shell/common/engine.cc
+@@ -490,9 +490,19 @@ void Engine::Render(int64_t view_id,
+   animator_->Render(view_id, std::move(layer_tree), device_pixel_ratio);
+ }
+ 
+-void Engine::UpdateSemantics(SemanticsNodeUpdates update,
++void Engine::UpdateSemantics(int64_t view_id,
++                             SemanticsNodeUpdates update,
+                              CustomAccessibilityActionUpdates actions) {
+-  delegate_.OnEngineUpdateSemantics(std::move(update), std::move(actions));
++  delegate_.OnEngineUpdateSemantics(view_id, std::move(update),
++                                    std::move(actions));
++}
++
++void Engine::SetApplicationLocale(std::string locale) {
++  delegate_.OnEngineSetApplicationLocale(std::move(locale));
++}
++
++void Engine::SetSemanticsTreeEnabled(bool enabled) {
++  delegate_.OnEngineSetSemanticsTreeEnabled(enabled);
+ }
+ 
+ void Engine::HandlePlatformMessage(std::unique_ptr<PlatformMessage> message) {
+diff --git a/flutter/shell/common/engine.h b/flutter/shell/common/engine.h
+index 754539e..7d19cc3 100644
+--- a/flutter/shell/common/engine.h
++++ b/flutter/shell/common/engine.h
+@@ -156,9 +156,24 @@ class Engine final : public RuntimeDelegate, PointerDataDispatcher::Delegate {
+     ///                      key and the custom node action as the value.
+     ///
+     virtual void OnEngineUpdateSemantics(
++        int64_t view_id,
+         SemanticsNodeUpdates updates,
+         CustomAccessibilityActionUpdates actions) = 0;
+ 
++    //--------------------------------------------------------------------------
++    /// @brief      Framework sets the application locale.
++    ///
++    /// @param[in]  locale  The application locale in BCP 47 format.
++    ///
++    virtual void OnEngineSetApplicationLocale(std::string locale) = 0;
++
++    //--------------------------------------------------------------------------
++    /// @brief      When the Framework starts or stops generating semantics tree,
++    ///             this new information needs to be conveyed to the underlying
++    ///             platform so that they can prepare to accept semantics update.
++    ///
++    virtual void OnEngineSetSemanticsTreeEnabled(bool enabled) = 0;
++
+     //--------------------------------------------------------------------------
+     /// @brief      When the Flutter application has a message to send to the
+     ///             underlying platform, the message needs to be forwarded to
+@@ -988,9 +1003,16 @@ class Engine final : public RuntimeDelegate, PointerDataDispatcher::Delegate {
+               float device_pixel_ratio) override;
+ 
+   // |RuntimeDelegate|
+-  void UpdateSemantics(SemanticsNodeUpdates update,
++  void UpdateSemantics(int64_t view_id,
++                       SemanticsNodeUpdates update,
+                        CustomAccessibilityActionUpdates actions) override;
+ 
++  // |RuntimeDelegate|
++  void SetApplicationLocale(std::string locale) override;
++
++  // |RuntimeDelegate|
++  void SetSemanticsTreeEnabled(bool enabled) override;
++
+   // |RuntimeDelegate|
+   void HandlePlatformMessage(std::unique_ptr<PlatformMessage> message) override;
+ 
+diff --git a/flutter/shell/common/platform_view.cc b/flutter/shell/common/platform_view.cc
+index c6473c0..55bdff7 100644
+--- a/flutter/shell/common/platform_view.cc
++++ b/flutter/shell/common/platform_view.cc
+@@ -120,10 +120,19 @@ fml::WeakPtr<PlatformView> PlatformView::GetWeakPtr() const {
+ }
+ 
+ void PlatformView::UpdateSemantics(
++    int64_t view_id,
+     SemanticsNodeUpdates update,  // NOLINT(performance-unnecessary-value-param)
+     // NOLINTNEXTLINE(performance-unnecessary-value-param)
+     CustomAccessibilityActionUpdates actions) {}
+ 
++void PlatformView::SetApplicationLocale(
++    std::string locale  // NOLINT(performance-unnecessary-value-param)
++) {}
++
++void PlatformView::SetSemanticsTreeEnabled(
++    bool enabled  // NOLINT(performance-unnecessary-value-param)
++) {}
++
+ void PlatformView::SendChannelUpdate(const std::string& name, bool listening) {}
+ 
+ void PlatformView::HandlePlatformMessage(
+diff --git a/flutter/shell/common/platform_view.h b/flutter/shell/common/platform_view.h
+index dfe1b2e..e8d9fc2 100644
+--- a/flutter/shell/common/platform_view.h
++++ b/flutter/shell/common/platform_view.h
+@@ -499,9 +499,22 @@ class PlatformView {
+   /// @param[in]  actions  A map with the stable semantics node identifier as
+   ///                      key and the custom node action as the value.
+   ///
+-  virtual void UpdateSemantics(SemanticsNodeUpdates updates,
++  virtual void UpdateSemantics(int64_t view_id,
++                               SemanticsNodeUpdates updates,
+                                CustomAccessibilityActionUpdates actions);
+ 
++  //----------------------------------------------------------------------------
++  /// @brief      Used by the framework to tell the embedder the application
++  ///             locale.
++  ///
++  virtual void SetApplicationLocale(std::string locale);
++
++  //----------------------------------------------------------------------------
++  /// @brief      Used by the framework to tell the embedder to prepare or clear
++  ///             resource for accepting semantics tree.
++  ///
++  virtual void SetSemanticsTreeEnabled(bool enabled);
++
+   //----------------------------------------------------------------------------
+   /// @brief      Used by the framework to tell the embedder that it has
+   ///             registered a listener on a given channel.
+diff --git a/flutter/shell/common/shell.cc b/flutter/shell/common/shell.cc
+index 3785249..f9a4ac7 100644
+--- a/flutter/shell/common/shell.cc
++++ b/flutter/shell/common/shell.cc
+@@ -1309,17 +1309,46 @@ void Shell::OnAnimatorDrawLastLayerTrees(
+ }
+ 
+ // |Engine::Delegate|
+-void Shell::OnEngineUpdateSemantics(SemanticsNodeUpdates update,
++void Shell::OnEngineUpdateSemantics(int64_t view_id,
++                                    SemanticsNodeUpdates update,
+                                     CustomAccessibilityActionUpdates actions) {
+   FML_DCHECK(is_set_up_);
+   FML_DCHECK(task_runners_.GetUITaskRunner()->RunsTasksOnCurrentThread());
+ 
+   task_runners_.GetPlatformTaskRunner()->RunNowOrPostTask(
+       task_runners_.GetPlatformTaskRunner(),
+-      [view = platform_view_->GetWeakPtr(), update = std::move(update),
++      [view = platform_view_->GetWeakPtr(), view_id, update = std::move(update),
+        actions = std::move(actions)] {
+         if (view) {
+-          view->UpdateSemantics(update, actions);
++          view->UpdateSemantics(view_id, update, actions);
++        }
++      });
++}
++
++// |Engine::Delegate|
++void Shell::OnEngineSetApplicationLocale(std::string locale) {
++  FML_DCHECK(is_set_up_);
++  FML_DCHECK(task_runners_.GetUITaskRunner()->RunsTasksOnCurrentThread());
++
++  task_runners_.GetPlatformTaskRunner()->RunNowOrPostTask(
++      task_runners_.GetPlatformTaskRunner(),
++      [view = platform_view_->GetWeakPtr(), locale = std::move(locale)] {
++        if (view) {
++          view->SetApplicationLocale(locale);
++        }
++      });
++}
++
++// |Engine::Delegate|
++void Shell::OnEngineSetSemanticsTreeEnabled(bool enabled) {
++  FML_DCHECK(is_set_up_);
++  FML_DCHECK(task_runners_.GetUITaskRunner()->RunsTasksOnCurrentThread());
++
++  task_runners_.GetPlatformTaskRunner()->RunNowOrPostTask(
++      task_runners_.GetPlatformTaskRunner(),
++      [view = platform_view_->GetWeakPtr(), enabled] {
++        if (view) {
++          view->SetSemanticsTreeEnabled(enabled);
+         }
+       });
+ }
+diff --git a/flutter/shell/common/shell.h b/flutter/shell/common/shell.h
+index 0ff7984..cb1f833 100644
+--- a/flutter/shell/common/shell.h
++++ b/flutter/shell/common/shell.h
+@@ -656,9 +656,16 @@ class Shell final : public PlatformView::Delegate,
+ 
+   // |Engine::Delegate|
+   void OnEngineUpdateSemantics(
++      int64_t view_id,
+       SemanticsNodeUpdates update,
+       CustomAccessibilityActionUpdates actions) override;
+ 
++  // |Engine::Delegate|
++  void OnEngineSetApplicationLocale(std::string locale) override;
++
++  // |Engine::Delegate|
++  void OnEngineSetSemanticsTreeEnabled(bool enabled) override;
++
+   // |Engine::Delegate|
+   void OnEngineHandlePlatformMessage(
+       std::unique_ptr<PlatformMessage> message) override;
+diff --git a/flutter/shell/platform/embedder/embedder.cc b/flutter/shell/platform/embedder/embedder.cc
+index 8bec536..b4e8851 100644
+--- a/flutter/shell/platform/embedder/embedder.cc
++++ b/flutter/shell/platform/embedder/embedder.cc
+@@ -1619,6 +1619,10 @@ MakeViewportMetricsFromWindowMetrics(
+ 
+   metrics.physical_width = SAFE_ACCESS(flutter_metrics, width, 0.0);
+   metrics.physical_height = SAFE_ACCESS(flutter_metrics, height, 0.0);
++  metrics.physical_min_width_constraint = metrics.physical_width;
++  metrics.physical_max_width_constraint = metrics.physical_width;
++  metrics.physical_min_height_constraint = metrics.physical_height;
++  metrics.physical_max_height_constraint = metrics.physical_height;
+   metrics.device_pixel_ratio = SAFE_ACCESS(flutter_metrics, pixel_ratio, 1.0);
+   metrics.physical_view_inset_top =
+       SAFE_ACCESS(flutter_metrics, physical_view_inset_top, 0.0);
+diff --git a/flutter/shell/platform/embedder/embedder_surface.cc b/flutter/shell/platform/embedder/embedder_surface.cc
+index 029833f..4451fa6 100644
+--- a/flutter/shell/platform/embedder/embedder_surface.cc
++++ b/flutter/shell/platform/embedder/embedder_surface.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "flutter/shell/platform/embedder/embedder_surface.h"
+ 
++#include "third_party/skia/include/gpu/ganesh/GrDirectContext.h"
++
+ namespace flutter {
+ 
+ EmbedderSurface::EmbedderSurface() = default;
+diff --git a/flutter/shell/platform/embedder/platform_view_embedder.cc b/flutter/shell/platform/embedder/platform_view_embedder.cc
+index 01bfbe9..1e4af88 100644
+--- a/flutter/shell/platform/embedder/platform_view_embedder.cc
++++ b/flutter/shell/platform/embedder/platform_view_embedder.cc
+@@ -113,6 +113,7 @@ PlatformViewEmbedder::PlatformViewEmbedder(
+ PlatformViewEmbedder::~PlatformViewEmbedder() = default;
+ 
+ void PlatformViewEmbedder::UpdateSemantics(
++    int64_t view_id,
+     flutter::SemanticsNodeUpdates update,
+     flutter::CustomAccessibilityActionUpdates actions) {
+   if (platform_dispatch_table_.update_semantics_callback != nullptr) {
+diff --git a/flutter/shell/platform/embedder/platform_view_embedder.h b/flutter/shell/platform/embedder/platform_view_embedder.h
+index 090e692..516cb4e 100644
+--- a/flutter/shell/platform/embedder/platform_view_embedder.h
++++ b/flutter/shell/platform/embedder/platform_view_embedder.h
+@@ -100,6 +100,7 @@ class PlatformViewEmbedder final : public PlatformView {
+ 
+   // |PlatformView|
+   void UpdateSemantics(
++      int64_t view_id,
+       flutter::SemanticsNodeUpdates update,
+       flutter::CustomAccessibilityActionUpdates actions) override;
+ 
+diff --git a/flutter/shell/platform/linux/BUILD.gn b/flutter/shell/platform/linux/BUILD.gn
+index 94c90ad..27d89ee 100644
+--- a/flutter/shell/platform/linux/BUILD.gn
++++ b/flutter/shell/platform/linux/BUILD.gn
+@@ -75,6 +75,15 @@ config("relative_flutter_linux_headers") {
+   include_dirs = [ "public" ]
+ }
+ 
++config("flutter_linux_shared_exports") {
++  visibility = [ ":*" ]
++  inputs = [ "flutter_linux_shared_exports.version" ]
++  ldflags = [
++    "-Wl,--version-script=" + rebase_path(inputs[0], root_build_dir),
++    "-Wl,--no-eh-frame-hdr",
++  ]
++}
++
+ source_set("flutter_linux_sources") {
+   public = _public_headers + [
+              "fl_binary_messenger_private.h",
+@@ -299,6 +308,8 @@ executable("flutter_linux_unittests") {
+ shared_library("flutter_linux_gtk") {
+   deps = [ ":flutter_linux" ]
+ 
++  configs += [ ":flutter_linux_shared_exports" ]
++
+   ldflags = [ "-Wl,-rpath,\$ORIGIN" ]
+ 
+   public_configs = [ "//flutter:config" ]
+diff --git a/flutter/shell/testing/BUILD.gn b/flutter/shell/testing/BUILD.gn
+index 393032b..1687cd4 100644
+--- a/flutter/shell/testing/BUILD.gn
++++ b/flutter/shell/testing/BUILD.gn
+@@ -54,8 +54,10 @@ executable("testing") {
+     deps += [
+       ":tester_gpu_configuration",
+       "//flutter/impeller",
+-      "//flutter/third_party/swiftshader/src/Vulkan:swiftshader_libvulkan_static",
+     ]
++    if (current_cpu != "loong64") {
++      deps += [ "//flutter/third_party/swiftshader/src/Vulkan:swiftshader_libvulkan_static" ]
++    }
+   }
+ 
+   metadata = {
+diff --git a/flutter/skia/BUILD.gn b/flutter/skia/BUILD.gn
+index eceabba..ebcb0b7 100644
+--- a/flutter/skia/BUILD.gn
++++ b/flutter/skia/BUILD.gn
+@@ -133,7 +133,7 @@ template("opts") {
+ }
+ 
+ is_x86 = current_cpu == "x64" || current_cpu == "x86"
+-is_loong64 = current_cpu == "loong64"
++is_loong64 = false
+ 
+ opts("hsw") {
+   enabled = is_x86
 diff --git a/flutter/testing/BUILD.gn b/flutter/testing/BUILD.gn
 index 1a21ac3..c8a1fde 100644
 --- a/flutter/testing/BUILD.gn
@@ -476,48 +1382,6 @@ index 1a21ac3..c8a1fde 100644
  if (use_swiftshader) {
    source_set("opengl") {
      testonly = true
-diff --git a/flutter/shell/testing/BUILD.gn b/flutter/shell/testing/BUILD.gn
-index 393032b..1687cd4 100644
---- a/flutter/shell/testing/BUILD.gn
-+++ b/flutter/shell/testing/BUILD.gn
-@@ -54,8 +54,10 @@ executable("testing") {
-     deps += [
-       ":tester_gpu_configuration",
-       "//flutter/impeller",
--      "//flutter/third_party/swiftshader/src/Vulkan:swiftshader_libvulkan_static",
-     ]
-+    if (current_cpu != "loong64") {
-+      deps += [ "//flutter/third_party/swiftshader/src/Vulkan:swiftshader_libvulkan_static" ]
-+    }
-   }
- 
-   metadata = {
-diff --git a/flutter/shell/platform/embedder/embedder_surface.cc b/flutter/shell/platform/embedder/embedder_surface.cc
-index 029833f..4451fa6 100644
---- a/flutter/shell/platform/embedder/embedder_surface.cc
-+++ b/flutter/shell/platform/embedder/embedder_surface.cc
-@@ -4,6 +4,8 @@
- 
- #include "flutter/shell/platform/embedder/embedder_surface.h"
- 
-+#include "third_party/skia/include/gpu/ganesh/GrDirectContext.h"
-+
- namespace flutter {
- 
- EmbedderSurface::EmbedderSurface() = default;
-diff --git a/flutter/impeller/tessellator/tessellator_libtess.cc b/flutter/impeller/tessellator/tessellator_libtess.cc
-index a0b66ac..6893988 100644
---- a/flutter/impeller/tessellator/tessellator_libtess.cc
-+++ b/flutter/impeller/tessellator/tessellator_libtess.cc
-@@ -4,6 +4,8 @@
- 
- #include "impeller/tessellator/tessellator_libtess.h"
- 
-+#include <climits>
-+
- #include "third_party/libtess2/Include/tesselator.h"
- 
- namespace impeller {
 diff --git a/flutter/vulkan/vulkan_application.cc b/flutter/vulkan/vulkan_application.cc
 index 8afb02e..6f2ffbd 100644
 --- a/flutter/vulkan/vulkan_application.cc
