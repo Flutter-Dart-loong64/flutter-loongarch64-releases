@@ -1,0 +1,533 @@
+# Flutter Engine old-world LoongArch64 support patch
+#
+# Apply from the engine checkout root (the directory containing build/ and flutter/):
+#   patch -p1 < oldworld-loongarch64-engine.patch
+#
+# This patch contains source/build-system compatibility changes needed to build
+# Flutter Engine on old-world LoongArch64 systems where the toolchain exposes
+# loongarch64 with the /lib64/ld.so.1 dynamic linker and no LSX/LASX compiler flags.
+
+--- a/build/config/BUILDCONFIG.gn
++++ b/build/config/BUILDCONFIG.gn
+@@ -190,6 +190,8 @@
+ # aix or one of the BSDs. If you need to check these, just check the
+ # current_os value directly.
+ 
++is_qnx = false
++
+ if (current_os == "win") {
+   is_android = false
+   is_chromeos = false
+--- a/build/config/compiler/BUILD.gn
++++ b/build/config/compiler/BUILD.gn
+@@ -577,8 +577,15 @@
+   # gen_snapshot) where this is not supported.
+   if (is_linux) {
+     if (!use_flutter_cxx) {
+-      cflags_cc += [ "-stdlib=libstdc++" ]
+-      ldflags += [ "-stdlib=libstdc++" ]
++      if (is_clang) {
++        cflags_cc += [ "-stdlib=libstdc++" ]
++        ldflags += [ "-stdlib=libstdc++" ]
++      } else {
++        ldflags += [
++          "-static-libstdc++",
++          "-static-libgcc",
++        ]
++      }
+       libs += [ "gcc" ]
+     }
+   }
+@@ -636,7 +643,6 @@
+   default_warning_flags += [
+     # Enables.
+     "-Wendif-labels",  # Weird old-style text after an #endif.
+-    "-Werror",  # Warnings as errors.
+ 
+     # Disables.
+     "-Wno-missing-field-initializers",  # "struct foo f = {0};"
+@@ -654,6 +660,12 @@
+     ]
+   }
+ 
++  if (is_clang) {
++    default_warning_flags += [ "-Werror" ]
++  } else {
++    default_warning_flags += [ "-Wno-attributes" ]
++  }
++
+   default_warning_flags += [
+     "-Wno-unused-but-set-parameter",
+     "-Wno-unused-but-set-variable",
+--- a/flutter/third_party/libpng/BUILD.gn
++++ b/flutter/third_party/libpng/BUILD.gn
+@@ -43,7 +43,7 @@
+     cflags_c += [ "-Wno-sign-compare" ]
+   }
+ 
+-  if (current_cpu == "loong64") {
++  if (false && current_cpu == "loong64") {
+     sources += [
+       "loongarch/filter_lsx_intrinsics.c",
+       "loongarch/loongarch_lsx_init.c",
+--- a/flutter/third_party/skia/BUILD.gn
++++ b/flutter/third_party/skia/BUILD.gn
+@@ -165,7 +165,7 @@
+ }
+ 
+ is_x86 = current_cpu == "x64" || current_cpu == "x86"
+-is_loong64 = current_cpu == "loong64"
++is_loong64 = false
+ 
+ opts("hsw") {
+   enabled = is_x86
+--- a/flutter/third_party/skia/third_party/libpng/BUILD.gn
++++ b/flutter/third_party/skia/third_party/libpng/BUILD.gn
+@@ -56,7 +56,7 @@
+       ]
+     }
+ 
+-    if (current_cpu == "loong64") {
++    if (false && current_cpu == "loong64") {
+       sources += [
+         "../externals/libpng/loongarch/filter_lsx_intrinsics.c",
+         "../externals/libpng/loongarch/loongarch_lsx_init.c",
+--- a/flutter/third_party/skia/gn/skia/BUILD.gn
++++ b/flutter/third_party/skia/gn/skia/BUILD.gn
+@@ -168,7 +168,6 @@
+     ldflags += [ "-m32" ]
+   } else if (current_cpu == "loong64") {
+     cflags += [
+-      "-mlsx",
+       "-Wno-switch-default",
+     ]
+   }
+--- a/flutter/third_party/skia/gn/core.gni
++++ b/flutter/third_party/skia/gn/core.gni
+@@ -276,7 +276,6 @@
+   "$_src/core/SkBitmapProcState.h",
+   "$_src/core/SkBitmapProcState_matrixProcs.cpp",
+   "$_src/core/SkBitmapProcState_opts.cpp",
+-  "$_src/core/SkBitmapProcState_opts_lasx.cpp",
+   "$_src/core/SkBitmapProcState_opts_ssse3.cpp",
+   "$_src/core/SkBlendMode.cpp",
+   "$_src/core/SkBlendModeBlender.cpp",
+@@ -291,7 +290,6 @@
+   "$_src/core/SkBlitRow_D32.cpp",
+   "$_src/core/SkBlitRow_opts.cpp",
+   "$_src/core/SkBlitRow_opts_hsw.cpp",
+-  "$_src/core/SkBlitRow_opts_lasx.cpp",
+   "$_src/core/SkBlitter.cpp",
+   "$_src/core/SkBlitter.h",
+   "$_src/core/SkBlitter_A8.cpp",
+@@ -572,7 +570,6 @@
+   "$_src/core/SkSwizzlePriv.h",
+   "$_src/core/SkSwizzler_opts.cpp",
+   "$_src/core/SkSwizzler_opts_hsw.cpp",
+-  "$_src/core/SkSwizzler_opts_lasx.cpp",
+   "$_src/core/SkSwizzler_opts_ssse3.cpp",
+   "$_src/core/SkTDynamicHash.h",
+   "$_src/core/SkTHash.h",
+--- a/flutter/third_party/skia/src/core/SkOpts.cpp
++++ b/flutter/third_party/skia/src/core/SkOpts.cpp
+@@ -60,7 +60,7 @@
+             if (SkCpu::Supports(SkCpu::SKX)) { Init_skx(); }
+         #endif
+ 
+-    #elif defined(SK_CPU_LOONGARCH)
++    #elif defined(SK_CPU_LOONGARCH) && defined(SK_CPU_LSX_LEVEL)
+         #if SK_CPU_LSX_LEVEL < SK_CPU_LSX_LEVEL_LASX
+             if (SkCpu::Supports(SkCpu::LOONGARCH_ASX)) { Init_lasx(); }
+         #endif
+--- a/flutter/third_party/skia/src/core/SkBitmapProcState_opts.cpp
++++ b/flutter/third_party/skia/src/core/SkBitmapProcState_opts.cpp
+@@ -31,7 +31,7 @@
+         #if SK_CPU_SSE_LEVEL < SK_CPU_SSE_LEVEL_SSSE3
+             if (SkCpu::Supports(SkCpu::SSSE3)) { Init_BitmapProcState_ssse3(); }
+         #endif
+-    #elif defined(SK_CPU_LOONGARCH)
++    #elif defined(SK_CPU_LOONGARCH) && defined(SK_CPU_LSX_LEVEL)
+         #if SK_CPU_LSX_LEVEL < SK_CPU_LSX_LEVEL_LASX
+             if (SkCpu::Supports(SkCpu::LOONGARCH_ASX)) { Init_BitmapProcState_lasx(); }
+         #endif
+--- a/flutter/third_party/skia/src/core/SkBlitRow_opts.cpp
++++ b/flutter/third_party/skia/src/core/SkBlitRow_opts.cpp
+@@ -31,7 +31,7 @@
+         #if SK_CPU_SSE_LEVEL < SK_CPU_SSE_LEVEL_AVX2
+             if (SkCpu::Supports(SkCpu::HSW)) { Init_BlitRow_hsw(); }
+         #endif
+-    #elif defined(SK_CPU_LOONGARCH)
++    #elif defined(SK_CPU_LOONGARCH) && defined(SK_CPU_LSX_LEVEL)
+         #if SK_CPU_LSX_LEVEL < SK_CPU_LSX_LEVEL_LASX
+             if (SkCpu::Supports(SkCpu::LOONGARCH_ASX)) { Init_BlitRow_lasx(); }
+         #endif
+--- a/flutter/third_party/skia/src/core/SkSwizzler_opts.cpp
++++ b/flutter/third_party/skia/src/core/SkSwizzler_opts.cpp
+@@ -46,7 +46,7 @@
+         #if SK_CPU_SSE_LEVEL < SK_CPU_SSE_LEVEL_AVX2
+             if (SkCpu::Supports(SkCpu::HSW)) { Init_Swizzler_hsw(); }
+         #endif
+-    #elif defined(SK_CPU_LOONGARCH)
++    #elif defined(SK_CPU_LOONGARCH) && defined(SK_CPU_LSX_LEVEL)
+         #if SK_CPU_LSX_LEVEL < SK_CPU_LSX_LEVEL_LASX
+             if (SkCpu::Supports(SkCpu::LOONGARCH_ASX)) { Init_Swizzler_lasx(); }
+         #endif
+diff --git a/flutter/impeller/tools/component.gni b/flutter/impeller/tools/component.gni
+index d6fdef6..b223b38 100644
+--- a/flutter/impeller/tools/component.gni
++++ b/flutter/impeller/tools/component.gni
+@@ -36,7 +36,9 @@ template("impeller_component") {
+       if (!defined(invoker.cflags)) {
+         cflags = []
+       }
+-      cflags += [ "-Wthread-safety-analysis" ]
++      if (is_clang) {
++        cflags += [ "-Wthread-safety-analysis" ]
++      }
+ 
+       if (!defined(invoker.cflags_objc)) {
+         cflags_objc = []
+diff --git a/flutter/impeller/geometry/point.h b/flutter/impeller/geometry/point.h
+index 2c19467..22f4000 100644
+--- a/flutter/impeller/geometry/point.h
++++ b/flutter/impeller/geometry/point.h
+@@ -224,8 +224,8 @@ struct TPoint {
+   }
+ 
+   constexpr TPoint Rotate(const Radians& angle) const {
+-    const auto cos_a = std::cosf(angle.radians);
+-    const auto sin_a = std::sinf(angle.radians);
++    const auto cos_a = std::cos(angle.radians);
++    const auto sin_a = std::sin(angle.radians);
+     return {x * cos_a - y * sin_a, x * sin_a + y * cos_a};
+   }
+ 
+diff --git a/flutter/impeller/display_list/aiks_dl_blend_unittests.cc b/flutter/impeller/display_list/aiks_dl_blend_unittests.cc
+index 062a61b..839a20a 100644
+--- a/flutter/impeller/display_list/aiks_dl_blend_unittests.cc
++++ b/flutter/impeller/display_list/aiks_dl_blend_unittests.cc
+@@ -802,7 +802,7 @@ TEST_P(AiksTest, ColorWheel) {
+     const int max_dist = 900;
+     for (int i = 0; i <= 900; i++) {
+       Radians r(kPhi / k2Pi * i);
+-      Scalar distance = r.radians / std::powf(4.12, 0.0026 * r.radians);
++      Scalar distance = r.radians / std::pow(4.12, 0.0026 * r.radians);
+       Scalar normalized_distance = static_cast<Scalar>(i) / max_dist;
+ 
+       auto color = color_wheel_sampler(r).WithAlpha(1.0f - normalized_distance);
+diff --git a/flutter/impeller/entity/contents/clip_contents.cc b/flutter/impeller/entity/contents/clip_contents.cc
+index 16e7268..8098732 100644
+--- a/flutter/impeller/entity/contents/clip_contents.cc
++++ b/flutter/impeller/entity/contents/clip_contents.cc
+@@ -20,7 +20,7 @@ static Scalar GetShaderClipDepth(uint32_t clip_depth) {
+   // Draw the clip at the max of the clip entity's depth slice, so that other
+   // draw calls with this same depth value will be culled even if they have a
+   // perspective transform.
+-  return std::nextafterf(Entity::GetShaderClipDepth(clip_depth + 1), 0.0f);
++  return std::nextafter(Entity::GetShaderClipDepth(clip_depth + 1), 0.0f);
+ }
+ 
+ /*******************************************************************************
+diff --git a/flutter/impeller/entity/geometry/stroke_path_geometry.cc b/flutter/impeller/entity/geometry/stroke_path_geometry.cc
+index a4fc27e..26c86c9 100644
+--- a/flutter/impeller/entity/geometry/stroke_path_geometry.cc
++++ b/flutter/impeller/entity/geometry/stroke_path_geometry.cc
+@@ -357,7 +357,7 @@ void CreateRoundCap(PositionWriter& vtx_builder,
+   vtx = position - orientation;
+   vtx_builder.AppendVertex(vtx);
+ 
+-  Scalar line_count = std::ceilf(ComputeCubicSubdivisions(scale, arc));
++  Scalar line_count = std::ceil(ComputeCubicSubdivisions(scale, arc));
+   for (size_t i = 1; i < line_count; i++) {
+     Point point = arc.Solve(i / line_count);
+     vtx = position + point;
+@@ -464,7 +464,7 @@ void CreateRoundJoin(PositionWriter& vtx_builder,
+                                           alignment * direction;
+ 
+   CubicPathComponent arc(start_offset, start_handle, middle_handle, middle);
+-  Scalar line_count = std::ceilf(ComputeCubicSubdivisions(scale, arc));
++  Scalar line_count = std::ceil(ComputeCubicSubdivisions(scale, arc));
+   for (size_t i = 1; i < line_count; i++) {
+     Point point = arc.Solve(i / line_count);
+     vtx_builder.AppendVertex(position + point * direction);
+diff --git a/flutter/impeller/geometry/geometry_asserts.h b/flutter/impeller/geometry/geometry_asserts.h
+index f5ad45b..9c9183c 100644
+--- a/flutter/impeller/geometry/geometry_asserts.h
++++ b/flutter/impeller/geometry/geometry_asserts.h
+@@ -39,12 +39,12 @@ inline bool NumberNear(double a, double b) {
+   static constexpr float kMinimumULPStep = (1.0f / (1 << 24));
+ 
+   auto adjust_step = [](float v) {
+-    return (std::abs(v) < kMinimumULPStep) ? std::copysignf(kMinimumULPStep, v)
++    return (std::abs(v) < kMinimumULPStep) ? std::copysign(kMinimumULPStep, v)
+                                            : v;
+   };
+ 
+-  float step_ab = adjust_step(a - std::nexttowardf(a, b));
+-  float step_ba = adjust_step(b - std::nexttowardf(b, a));
++  float step_ab = adjust_step(a - std::nexttoward(a, b));
++  float step_ba = adjust_step(b - std::nexttoward(b, a));
+ 
+   float ab_ulps = (a - b) / step_ab;
+   float ba_ulps = (b - a) / step_ba;
+diff --git a/flutter/impeller/geometry/path_component.cc b/flutter/impeller/geometry/path_component.cc
+index 1637bc9..8581c63 100644
+--- a/flutter/impeller/geometry/path_component.cc
++++ b/flutter/impeller/geometry/path_component.cc
+@@ -254,7 +254,7 @@ Point QuadraticPathComponent::SolveDerivative(Scalar time) const {
+ void QuadraticPathComponent::ToLinearPathComponents(
+     Scalar scale,
+     VertexWriter& writer) const {
+-  Scalar line_count = std::ceilf(ComputeQuadradicSubdivisions(scale, *this));
++  Scalar line_count = std::ceil(ComputeQuadradicSubdivisions(scale, *this));
+   for (size_t i = 1; i < line_count; i += 1) {
+     writer.Write(Solve(i / line_count));
+   }
+@@ -273,7 +273,7 @@ void QuadraticPathComponent::ToLinearPathComponents(
+     Scalar scale_factor,
+     const PointProc& proc) const {
+   Scalar line_count =
+-      std::ceilf(ComputeQuadradicSubdivisions(scale_factor, *this));
++      std::ceil(ComputeQuadradicSubdivisions(scale_factor, *this));
+   for (size_t i = 1; i < line_count; i += 1) {
+     proc(Solve(i / line_count));
+   }
+@@ -281,7 +281,7 @@ void QuadraticPathComponent::ToLinearPathComponents(
+ }
+ 
+ size_t QuadraticPathComponent::CountLinearPathComponents(Scalar scale) const {
+-  return std::ceilf(ComputeQuadradicSubdivisions(scale, *this)) + 2;
++  return std::ceil(ComputeQuadradicSubdivisions(scale, *this)) + 2;
+ }
+ 
+ std::vector<Point> QuadraticPathComponent::Extrema() const {
+@@ -332,7 +332,7 @@ void CubicPathComponent::AppendPolylinePoints(
+ 
+ void CubicPathComponent::ToLinearPathComponents(Scalar scale,
+                                                 VertexWriter& writer) const {
+-  Scalar line_count = std::ceilf(ComputeCubicSubdivisions(scale, *this));
++  Scalar line_count = std::ceil(ComputeCubicSubdivisions(scale, *this));
+   for (size_t i = 1; i < line_count; i++) {
+     writer.Write(Solve(i / line_count));
+   }
+@@ -340,7 +340,7 @@ void CubicPathComponent::ToLinearPathComponents(Scalar scale,
+ }
+ 
+ size_t CubicPathComponent::CountLinearPathComponents(Scalar scale) const {
+-  return std::ceilf(ComputeCubicSubdivisions(scale, *this)) + 2;
++  return std::ceil(ComputeCubicSubdivisions(scale, *this)) + 2;
+ }
+ 
+ inline QuadraticPathComponent CubicPathComponent::Lower() const {
+@@ -360,7 +360,7 @@ CubicPathComponent CubicPathComponent::Subsegment(Scalar t0, Scalar t1) const {
+ 
+ void CubicPathComponent::ToLinearPathComponents(Scalar scale,
+                                                 const PointProc& proc) const {
+-  Scalar line_count = std::ceilf(ComputeCubicSubdivisions(scale, *this));
++  Scalar line_count = std::ceil(ComputeCubicSubdivisions(scale, *this));
+   for (size_t i = 1; i < line_count; i++) {
+     proc(Solve(i / line_count));
+   }
+diff --git a/flutter/fml/message_loop_task_queues.cc b/flutter/fml/message_loop_task_queues.cc
+index f32fa74..f86d9ef 100644
+--- a/flutter/fml/message_loop_task_queues.cc
++++ b/flutter/fml/message_loop_task_queues.cc
+@@ -6,6 +6,8 @@
+ 
+ #include "flutter/fml/message_loop_task_queues.h"
+ 
++#include <climits>
++
+ #include <algorithm>
+ #include <iostream>
+ #include <memory>
+diff --git a/flutter/display_list/dl_storage.cc b/flutter/display_list/dl_storage.cc
+index 9a36d46..3910fc2 100644
+--- a/flutter/display_list/dl_storage.cc
++++ b/flutter/display_list/dl_storage.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "flutter/display_list/dl_storage.h"
+ 
++#include <cstring>
++
+ namespace flutter {
+ 
+ static constexpr inline bool is_power_of_two(int value) {
+diff --git a/flutter/display_list/dl_builder.h b/flutter/display_list/dl_builder.h
+index 992e4eb..e884229 100644
+--- a/flutter/display_list/dl_builder.h
++++ b/flutter/display_list/dl_builder.h
+@@ -29,6 +29,10 @@ class DisplayListBuilder final : public virtual DlCanvas,
+                                  virtual DlOpReceiver,
+                                  DisplayListOpFlags {
+  public:
++  using ClipOp = DlCanvas::ClipOp;
++  using PointMode = DlCanvas::PointMode;
++  using SrcRectConstraint = DlCanvas::SrcRectConstraint;
++
+   static constexpr DlRect kMaxCullRect =
+       DlRect::MakeLTRB(-1E9F, -1E9F, 1E9F, 1E9F);
+ 
+diff --git a/flutter/lib/gpu/BUILD.gn b/flutter/lib/gpu/BUILD.gn
+index 86105cb..5144665 100644
+--- a/flutter/lib/gpu/BUILD.gn
++++ b/flutter/lib/gpu/BUILD.gn
+@@ -7,15 +7,18 @@ import("//flutter/impeller/tools/impeller.gni")
+ import("//flutter/testing/testing.gni")
+ 
+ source_set("gpu") {
+-  cflags = [
+-    # Dart gives us doubles. Skia and Impeller work in floats.
+-    # If Dart gives us a double > FLT_MAX or < -FLT_MAX, implicit conversion
+-    # will convert it to either inf/-inf or FLT_MAX/-FLT_MAX (undefined
+-    # behavior). This can result in surprising and difficult to debug behavior
+-    # for Flutter application developers, so it should be explicitly handled
+-    # via SafeNarrow.
+-    "-Wimplicit-float-conversion",
+-  ]
++  cflags = []
++  if (is_clang) {
++    cflags += [
++      # Dart gives us doubles. Skia and Impeller work in floats.
++      # If Dart gives us a double > FLT_MAX or < -FLT_MAX, implicit conversion
++      # will convert it to either inf/-inf or FLT_MAX/-FLT_MAX (undefined
++      # behavior). This can result in surprising and difficult to debug behavior
++      # for Flutter application developers, so it should be explicitly handled
++      # via SafeNarrow.
++      "-Wimplicit-float-conversion",
++    ]
++  }
+ 
+   if (is_win) {
+     # This causes build failures in third_party dependencies on Windows.
+diff --git a/flutter/lib/ui/BUILD.gn b/flutter/lib/ui/BUILD.gn
+index 4b30edb..23eb905 100644
+--- a/flutter/lib/ui/BUILD.gn
++++ b/flutter/lib/ui/BUILD.gn
+@@ -12,15 +12,18 @@ if (is_fuchsia) {
+ }
+ 
+ source_set("ui") {
+-  cflags = [
+-    # Dart gives us doubles. Skia and Impeller work in floats.
+-    # If Dart gives us a double > FLT_MAX or < -FLT_MAX, implicit conversion
+-    # will convert it to either inf/-inf or FLT_MAX/-FLT_MAX (undefined
+-    # behavior). This can result in surprising and difficult to debug behavior
+-    # for Flutter application developers, so it should be explicitly handled
+-    # via SafeNarrow.
+-    "-Wimplicit-float-conversion",
+-  ]
++  cflags = []
++  if (is_clang) {
++    cflags += [
++      # Dart gives us doubles. Skia and Impeller work in floats.
++      # If Dart gives us a double > FLT_MAX or < -FLT_MAX, implicit conversion
++      # will convert it to either inf/-inf or FLT_MAX/-FLT_MAX (undefined
++      # behavior). This can result in surprising and difficult to debug behavior
++      # for Flutter application developers, so it should be explicitly handled
++      # via SafeNarrow.
++      "-Wimplicit-float-conversion",
++    ]
++  }
+ 
+   if (is_win) {
+     # This causes build failures in third_party dependencies on Windows.
+diff --git a/flutter/shell/common/BUILD.gn b/flutter/shell/common/BUILD.gn
+index ddceabb..c5284b4 100644
+--- a/flutter/shell/common/BUILD.gn
++++ b/flutter/shell/common/BUILD.gn
+@@ -351,14 +351,14 @@ if (enable_unittests) {
+         "${fuchsia_sdk}/pkg/fidl_cpp",
+         "${fuchsia_sdk}/pkg/sys_cpp",
+       ]
+-    } else if (shell_enable_gl) {
++    } else if (shell_enable_gl && current_cpu != "loong64") {
+       # TODO(63837): This test is hard-coded to use a TestGLSurface so it cannot
+       # run on fuchsia or when GL is not enabled.
+       sources += [ "shell_io_manager_unittests.cc" ]
+       deps += [ "//flutter/third_party/swiftshader" ]
+     }
+ 
+-    if (shell_enable_gl) {
++    if (shell_enable_gl && current_cpu != "loong64") {
+       deps += [
+         "//flutter/third_party/angle:libEGL_static",
+         "//flutter/third_party/angle:libGLESv2_static",
+diff --git a/flutter/testing/BUILD.gn b/flutter/testing/BUILD.gn
+index 1a21ac3..c8a1fde 100644
+--- a/flutter/testing/BUILD.gn
++++ b/flutter/testing/BUILD.gn
+@@ -167,7 +167,7 @@ if (enable_unittests && shell_enable_vulkan) {
+       "//flutter/vulkan/procs",
+     ]
+ 
+-    if (!is_fuchsia) {
++    if (!is_fuchsia && current_cpu != "loong64") {
+       deps += [ "//flutter/third_party/swiftshader" ]
+       configs += [ "//flutter/third_party/swiftshader:swiftshader_config" ]
+     }
+@@ -217,7 +217,7 @@ if (is_mac || is_ios) {
+ }
+ 
+ # We only use SwiftShader on unittests
+-use_swiftshader = enable_unittests && shell_enable_gl
++use_swiftshader = enable_unittests && shell_enable_gl && current_cpu != "loong64"
+ if (use_swiftshader) {
+   source_set("opengl") {
+     testonly = true
+diff --git a/flutter/shell/testing/BUILD.gn b/flutter/shell/testing/BUILD.gn
+index 393032b..1687cd4 100644
+--- a/flutter/shell/testing/BUILD.gn
++++ b/flutter/shell/testing/BUILD.gn
+@@ -54,8 +54,10 @@ executable("testing") {
+     deps += [
+       ":tester_gpu_configuration",
+       "//flutter/impeller",
+-      "//flutter/third_party/swiftshader/src/Vulkan:swiftshader_libvulkan_static",
+     ]
++    if (current_cpu != "loong64") {
++      deps += [ "//flutter/third_party/swiftshader/src/Vulkan:swiftshader_libvulkan_static" ]
++    }
+   }
+ 
+   metadata = {
+diff --git a/flutter/shell/platform/embedder/embedder_surface.cc b/flutter/shell/platform/embedder/embedder_surface.cc
+index 029833f..4451fa6 100644
+--- a/flutter/shell/platform/embedder/embedder_surface.cc
++++ b/flutter/shell/platform/embedder/embedder_surface.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "flutter/shell/platform/embedder/embedder_surface.h"
+ 
++#include "third_party/skia/include/gpu/ganesh/GrDirectContext.h"
++
+ namespace flutter {
+ 
+ EmbedderSurface::EmbedderSurface() = default;
+diff --git a/flutter/impeller/tessellator/tessellator_libtess.cc b/flutter/impeller/tessellator/tessellator_libtess.cc
+index a0b66ac..6893988 100644
+--- a/flutter/impeller/tessellator/tessellator_libtess.cc
++++ b/flutter/impeller/tessellator/tessellator_libtess.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "impeller/tessellator/tessellator_libtess.h"
+ 
++#include <climits>
++
+ #include "third_party/libtess2/Include/tesselator.h"
+ 
+ namespace impeller {
+diff --git a/flutter/vulkan/vulkan_application.cc b/flutter/vulkan/vulkan_application.cc
+index 8afb02e..6f2ffbd 100644
+--- a/flutter/vulkan/vulkan_application.cc
++++ b/flutter/vulkan/vulkan_application.cc
+@@ -11,6 +11,8 @@
+ #include "vulkan_device.h"
+ #include "vulkan_utilities.h"
+ 
++#include <cstring>
++
+ namespace vulkan {
+ 
+ // static
