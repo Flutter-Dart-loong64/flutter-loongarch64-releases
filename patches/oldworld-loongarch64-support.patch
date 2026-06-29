@@ -1,0 +1,809 @@
+diff --git a/engine/src/build/config/compiler/BUILD.gn b/engine/src/build/config/compiler/BUILD.gn
+index 1c9dd231e40..41fd6858ee5 100644
+--- a/engine/src/build/config/compiler/BUILD.gn
++++ b/engine/src/build/config/compiler/BUILD.gn
+@@ -72,6 +72,10 @@ config("compiler") {
+   defines = []
+   configs = []
+ 
++  if (is_linux && current_cpu == "loong64" && !is_clang) {
++    defines += [ "SK_DISABLE_LOONGARCH_RUNTIME_LASX" ]
++  }
++
+   # Platform-specific configs.
+   if (is_ios || is_mac) {
+     configs += [ "//build/config/darwin:compiler" ]
+@@ -98,8 +102,6 @@ config("compiler") {
+       "/guard:cf",  # Enable control flow guard security checks.
+     ]
+   } else {
+-    cflags_c += [ "-std=c11" ]
+-
+     # Common GCC compiler flags setup.
+     # --------------------------------
+     cflags += [ "-fno-strict-aliasing" ]  # See http://crbug.com/32204
+@@ -489,17 +491,16 @@ config("compiler") {
+ # C++ modules (available and enabled by default in C++20 and above) are
+ # prohibited by the style guide.
+ config("cxx_disable_modules") {
+-  disable_modules_flags = [
+-    "-fno-modules",
+-
+-    # Some Clang versions do not disable ObjC modules (as tested by
+-    # __has_feature(objc_modules)) when just -fno-modules is present.
+-    "-Xclang",
+-    "-fno-cxx-modules",
+-  ]
+-  cflags_c = disable_modules_flags
++  disable_modules_flags = [ "-fno-modules" ]
++  if (is_clang) {
++    disable_modules_flags += [
++      # Some Clang versions do not disable ObjC modules (as tested by
++      # __has_feature(objc_modules)) when just -fno-modules is present.
++      "-Xclang",
++      "-fno-cxx-modules",
++    ]
++  }
+   cflags_cc = disable_modules_flags
+-  cflags_objc = disable_modules_flags
+   cflags_objcc = disable_modules_flags
+ }
+ 
+@@ -674,8 +675,10 @@ config("runtime_library") {
+   # gen_snapshot) where this is not supported.
+   if (is_linux) {
+     if (!use_flutter_cxx) {
+-      cflags_cc += [ "-stdlib=libstdc++" ]
+-      ldflags += [ "-stdlib=libstdc++" ]
++      if (is_clang) {
++        cflags_cc += [ "-stdlib=libstdc++" ]
++        ldflags += [ "-stdlib=libstdc++" ]
++      }
+       libs += [ "gcc" ]
+     }
+   }
+@@ -755,6 +758,47 @@ if (is_win) {
+   if (is_linux && current_cpu == "loong64" && is_clang) {
+     default_warning_flags += [ "-Wno-unknown-warning-option" ]
+   }
++  if (is_linux && current_cpu == "loong64" && !is_clang) {
++    default_warning_flags += [
++      "-Wno-array-bounds",
++      "-Wno-attributes",
++      "-Wno-comment",
++      "-Wno-error",
++      "-Wno-extra",
++      "-Wno-implicit-fallthrough",
++      "-Wno-dangling-pointer",
++      "-Wno-format-truncation",
++      "-Wno-maybe-uninitialized",
++      "-Wno-multichar",
++      "-Wno-nonnull",
++      "-Wno-restrict",
++      "-Wno-sign-compare",
++      "-Wno-stringop-overread",
++      "-Wno-stringop-overflow",
++      "-Wno-type-limits",
++      "-Wno-unknown-pragmas",
++      "-Wno-unused-function",
++      "-Wno-unused-variable",
++    ]
++    default_warning_flags_cc += [
++      "-Wno-class-memaccess",
++      "-Wno-changes-meaning",
++      "-Wno-deprecated",
++      "-Wno-deprecated-copy",
++      "-Wno-dangling-reference",
++      "-Wno-deprecated-declarations",
++      "-Wno-ignored-attributes",
++      "-Wno-ignored-qualifiers",
++      "-Wno-invalid-offsetof",
++      "-Wno-overloaded-virtual",
++      "-Wno-parentheses",
++      "-Wno-pessimizing-move",
++      "-Wno-redundant-move",
++      "-Wno-subobject-linkage",
++      "-Wno-template-id-cdtor",
++      "-Wno-return-type",
++    ]
++  }
+ 
+   if (is_wasm) {
+     default_warning_flags += [
+diff --git a/engine/src/flutter/display_list/benchmarking/dl_benchmarks.cc b/engine/src/flutter/display_list/benchmarking/dl_benchmarks.cc
+index 4068314510a..2abcc72a4d9 100644
+--- a/engine/src/flutter/display_list/benchmarking/dl_benchmarks.cc
++++ b/engine/src/flutter/display_list/benchmarking/dl_benchmarks.cc
+@@ -724,8 +724,8 @@ std::vector<DlPoint> GetPolygonPoints(size_t n, DlPoint center, DlScalar r) {
+   float full_circle = 2.0f * M_PI;
+   for (size_t i = 0; i < n; i++) {
+     angle = (full_circle / static_cast<float>(n)) * static_cast<float>(i);
+-    x = center.x + r * std::cosf(angle);
+-    y = center.y + r * std::sinf(angle);
++    x = center.x + r * std::cos(angle);
++    y = center.y + r * std::sin(angle);
+     points.emplace_back(x, y);
+   }
+   return points;
+diff --git a/engine/src/flutter/display_list/display_list.cc b/engine/src/flutter/display_list/display_list.cc
+index be55350aeaf..12a6be9050b 100644
+--- a/engine/src/flutter/display_list/display_list.cc
++++ b/engine/src/flutter/display_list/display_list.cc
+@@ -2,6 +2,7 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include <cstring>
+ #include <type_traits>
+ 
+ #include "flutter/display_list/display_list.h"
+diff --git a/engine/src/flutter/display_list/dl_builder.cc b/engine/src/flutter/display_list/dl_builder.cc
+index e2ee43e5513..d5600e3827a 100644
+--- a/engine/src/flutter/display_list/dl_builder.cc
++++ b/engine/src/flutter/display_list/dl_builder.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "flutter/display_list/dl_builder.h"
+ 
++#include <cstring>
++
+ #include "flutter/display_list/display_list.h"
+ #include "flutter/display_list/dl_blend_mode.h"
+ #include "flutter/display_list/dl_op_flags.h"
+diff --git a/engine/src/flutter/display_list/dl_op_records.h b/engine/src/flutter/display_list/dl_op_records.h
+index 7c0bfd6d1bc..6fee68ba83d 100644
+--- a/engine/src/flutter/display_list/dl_op_records.h
++++ b/engine/src/flutter/display_list/dl_op_records.h
+@@ -5,6 +5,8 @@
+ #ifndef FLUTTER_DISPLAY_LIST_DL_OP_RECORDS_H_
+ #define FLUTTER_DISPLAY_LIST_DL_OP_RECORDS_H_
+ 
++#include <cstring>
++
+ #include "flutter/display_list/display_list.h"
+ #include "flutter/display_list/dl_blend_mode.h"
+ #include "flutter/display_list/dl_op_receiver.h"
+diff --git a/engine/src/flutter/display_list/dl_storage.cc b/engine/src/flutter/display_list/dl_storage.cc
+index 6fc6afb2b4d..4923bfc42eb 100644
+--- a/engine/src/flutter/display_list/dl_storage.cc
++++ b/engine/src/flutter/display_list/dl_storage.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "flutter/display_list/dl_storage.h"
+ 
++#include <cstring>
++
+ namespace flutter {
+ 
+ static constexpr inline bool is_power_of_two(int value) {
+diff --git a/engine/src/flutter/display_list/dl_vertices.cc b/engine/src/flutter/display_list/dl_vertices.cc
+index a55c9f7d996..307699ab413 100644
+--- a/engine/src/flutter/display_list/dl_vertices.cc
++++ b/engine/src/flutter/display_list/dl_vertices.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "flutter/display_list/dl_vertices.h"
+ 
++#include <cstring>
++
+ #include "flutter/display_list/utils/dl_accumulation_rect.h"
+ #include "flutter/fml/logging.h"
+ 
+diff --git a/engine/src/flutter/display_list/effects/color_filters/dl_matrix_color_filter.h b/engine/src/flutter/display_list/effects/color_filters/dl_matrix_color_filter.h
+index 271fa8cac91..97317fe4a7c 100644
+--- a/engine/src/flutter/display_list/effects/color_filters/dl_matrix_color_filter.h
++++ b/engine/src/flutter/display_list/effects/color_filters/dl_matrix_color_filter.h
+@@ -5,6 +5,8 @@
+ #ifndef FLUTTER_DISPLAY_LIST_EFFECTS_COLOR_FILTERS_DL_MATRIX_COLOR_FILTER_H_
+ #define FLUTTER_DISPLAY_LIST_EFFECTS_COLOR_FILTERS_DL_MATRIX_COLOR_FILTER_H_
+ 
++#include <cstring>
++
+ #include "flutter/display_list/effects/dl_color_filter.h"
+ 
+ namespace flutter {
+diff --git a/engine/src/flutter/display_list/effects/dl_color_source.cc b/engine/src/flutter/display_list/effects/dl_color_source.cc
+index 3a0fd78c15b..1369335b8c9 100644
+--- a/engine/src/flutter/display_list/effects/dl_color_source.cc
++++ b/engine/src/flutter/display_list/effects/dl_color_source.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "flutter/display_list/effects/dl_color_source.h"
+ 
++#include <cstring>
++
+ #include "flutter/display_list/dl_sampling_options.h"
+ #include "flutter/display_list/effects/dl_color_sources.h"
+ #include "flutter/display_list/effects/dl_runtime_effect.h"
+diff --git a/engine/src/flutter/display_list/geometry/dl_region.cc b/engine/src/flutter/display_list/geometry/dl_region.cc
+index 24fed57d1b1..4b601812478 100644
+--- a/engine/src/flutter/display_list/geometry/dl_region.cc
++++ b/engine/src/flutter/display_list/geometry/dl_region.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "flutter/display_list/geometry/dl_region.h"
+ 
++#include <cstring>
++
+ #include "flutter/fml/logging.h"
+ 
+ namespace flutter {
+diff --git a/engine/src/flutter/flow/raster_cache_key.h b/engine/src/flutter/flow/raster_cache_key.h
+index 93afd1db35b..fb3f2c0a501 100644
+--- a/engine/src/flutter/flow/raster_cache_key.h
++++ b/engine/src/flutter/flow/raster_cache_key.h
+@@ -106,8 +106,7 @@ class RasterCacheKey {
+   };
+ 
+   struct Equal {
+-    constexpr bool operator()(const RasterCacheKey& lhs,
+-                              const RasterCacheKey& rhs) const {
++    bool operator()(const RasterCacheKey& lhs, const RasterCacheKey& rhs) const {
+       return lhs.id_ == rhs.id_ && lhs.matrix_ == rhs.matrix_;
+     }
+   };
+diff --git a/engine/src/flutter/impeller/display_list/dl_runtime_effect_impeller.cc b/engine/src/flutter/impeller/display_list/dl_runtime_effect_impeller.cc
+index 73e360f65b0..07902fff304 100644
+--- a/engine/src/flutter/impeller/display_list/dl_runtime_effect_impeller.cc
++++ b/engine/src/flutter/impeller/display_list/dl_runtime_effect_impeller.cc
+@@ -4,6 +4,7 @@
+ 
+ #include "flutter/impeller/display_list/dl_runtime_effect_impeller.h"
+ #include "flutter/impeller/runtime_stage/runtime_stage.h"
++#include "third_party/skia/include/effects/SkRuntimeEffect.h"
+ 
+ namespace flutter {
+ 
+diff --git a/engine/src/flutter/impeller/entity/contents/conical_gradient_contents.cc b/engine/src/flutter/impeller/entity/contents/conical_gradient_contents.cc
+index 692d7928386..2976b1e45e7 100644
+--- a/engine/src/flutter/impeller/entity/contents/conical_gradient_contents.cc
++++ b/engine/src/flutter/impeller/entity/contents/conical_gradient_contents.cc
+@@ -24,7 +24,7 @@ ConicalKind GetConicalKind(Point center,
+       center.GetDistance(focus.value()) < kEhCloseEnough) {
+     kind = ConicalKind::kRadial;
+   }
+-  if (focus.has_value() && std::fabsf(radius - focus_radius) < kEhCloseEnough) {
++  if (focus.has_value() && std::fabs(radius - focus_radius) < kEhCloseEnough) {
+     if (kind == ConicalKind::kRadial) {
+       kind = ConicalKind::kStripAndRadial;
+     } else {
+diff --git a/engine/src/flutter/impeller/entity/contents/line_contents.cc b/engine/src/flutter/impeller/entity/contents/line_contents.cc
+index 4370bc58e17..b01980573bf 100644
+--- a/engine/src/flutter/impeller/entity/contents/line_contents.cc
++++ b/engine/src/flutter/impeller/entity/contents/line_contents.cc
+@@ -245,9 +245,9 @@ LineContents::CalculatePerVertex(LineVertexShader::PerVertexData* per_vertex,
+           geometry->GetP0(), p1_prime, geometry->GetWidth())) {
+     return fml::Status(fml::StatusCode::kAborted, "No valid corners");
+   }
+-  Scalar effective_line_width = std::fabsf((corners[2] - corners[0]).y);
++  Scalar effective_line_width = std::fabs((corners[2] - corners[0]).y);
+   ExpandLine(corners, Point(expand_size, expand_size));
+-  Scalar padded_line_width = std::fabsf((corners[2] - corners[0]).y);
++  Scalar padded_line_width = std::fabs((corners[2] - corners[0]).y);
+   Scalar effective_sample_radius =
+       (padded_line_width - effective_line_width) / 2.f;
+   LineInfo line_info =
+diff --git a/engine/src/flutter/impeller/entity/geometry/stroke_path_geometry.cc b/engine/src/flutter/impeller/entity/geometry/stroke_path_geometry.cc
+index ae00da7ca57..71536a27d22 100644
+--- a/engine/src/flutter/impeller/entity/geometry/stroke_path_geometry.cc
++++ b/engine/src/flutter/impeller/entity/geometry/stroke_path_geometry.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "impeller/entity/geometry/stroke_path_geometry.h"
+ 
++#include <cstring>
++
+ #include "flutter/display_list/geometry/dl_path.h"
+ #include "impeller/core/buffer_view.h"
+ #include "impeller/core/formats.h"
+@@ -232,7 +234,7 @@ class StrokePathSegmentReceiver : public PathAndArcSegmentReceiver {
+       // the scale basis by half the stroke width, but make sure the width
+       // is at least 1.0 so that we don't reduce the natural transform scale.
+       Scalar stroke_scale = scale_ * std::max(1.0f, half_stroke_width_);
+-      Scalar count = std::ceilf(curve.SubdivisionCount(stroke_scale));
++      Scalar count = std::ceil(curve.SubdivisionCount(stroke_scale));
+ 
+       Point prev = curve.p1;
+       SeparatedVector2 prev_perpendicular = start_perpendicular;
+diff --git a/engine/src/flutter/impeller/geometry/arc.cc b/engine/src/flutter/impeller/geometry/arc.cc
+index fc52cc63524..55027fb8a44 100644
+--- a/engine/src/flutter/impeller/geometry/arc.cc
++++ b/engine/src/flutter/impeller/geometry/arc.cc
+@@ -19,7 +19,7 @@ Arc::Arc(const Rect& bounds, Degrees start, Degrees sweep, bool include_center)
+       // stroke the entire perimeter, but the two segments that connect to
+       // the center are at the proper angles.
+       // Normalize to less than 720.
+-      sweep.degrees = 360.0f + std::fmodf(sweep.degrees, 360.0f);
++      sweep.degrees = 360.0f + std::fmod(sweep.degrees, 360.0f);
+     }
+   } else {
+     // Don't bother sweeping any distance if anything is non-finite.
+diff --git a/engine/src/flutter/impeller/geometry/point.h b/engine/src/flutter/impeller/geometry/point.h
+index fb10f27ae85..863bce31ba3 100644
+--- a/engine/src/flutter/impeller/geometry/point.h
++++ b/engine/src/flutter/impeller/geometry/point.h
+@@ -313,8 +313,8 @@ struct TPoint {
+   }
+ 
+   constexpr TPoint Rotate(const Radians& angle) const {
+-    const auto cos_a = std::cosf(angle.radians);
+-    const auto sin_a = std::sinf(angle.radians);
++    const auto cos_a = std::cos(angle.radians);
++    const auto sin_a = std::sin(angle.radians);
+     return {x * cos_a - y * sin_a, x * sin_a + y * cos_a};
+   }
+ 
+diff --git a/engine/src/flutter/impeller/renderer/backend/vulkan/device_buffer_vk.cc b/engine/src/flutter/impeller/renderer/backend/vulkan/device_buffer_vk.cc
+index f713d9198d5..419a8f3c868 100644
+--- a/engine/src/flutter/impeller/renderer/backend/vulkan/device_buffer_vk.cc
++++ b/engine/src/flutter/impeller/renderer/backend/vulkan/device_buffer_vk.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "impeller/renderer/backend/vulkan/device_buffer_vk.h"
+ 
++#include <cstring>
++
+ #include "flutter/flutter_vma/flutter_vma.h"
+ #include "impeller/renderer/backend/vulkan/context_vk.h"
+ 
+diff --git a/engine/src/flutter/impeller/renderer/backend/vulkan/pipeline_cache_data_vk.cc b/engine/src/flutter/impeller/renderer/backend/vulkan/pipeline_cache_data_vk.cc
+index b1011556e68..bf900e1deef 100644
+--- a/engine/src/flutter/impeller/renderer/backend/vulkan/pipeline_cache_data_vk.cc
++++ b/engine/src/flutter/impeller/renderer/backend/vulkan/pipeline_cache_data_vk.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "impeller/renderer/backend/vulkan/pipeline_cache_data_vk.h"
+ 
++#include <cstring>
++
+ #include "flutter/fml/file.h"
+ #include "impeller/base/allocation.h"
+ #include "impeller/base/validation.h"
+diff --git a/engine/src/flutter/impeller/renderer/backend/vulkan/shader_library_vk.cc b/engine/src/flutter/impeller/renderer/backend/vulkan/shader_library_vk.cc
+index 0a94e6b23bb..1d24f76063e 100644
+--- a/engine/src/flutter/impeller/renderer/backend/vulkan/shader_library_vk.cc
++++ b/engine/src/flutter/impeller/renderer/backend/vulkan/shader_library_vk.cc
+@@ -4,6 +4,7 @@
+ 
+ #include "impeller/renderer/backend/vulkan/shader_library_vk.h"
+ 
++#include <cstring>
+ #include <cstdint>
+ 
+ #include "flutter/fml/logging.h"
+diff --git a/engine/src/flutter/impeller/tessellator/path_tessellator.cc b/engine/src/flutter/impeller/tessellator/path_tessellator.cc
+index c67fc9468e8..17e997f8c8a 100644
+--- a/engine/src/flutter/impeller/tessellator/path_tessellator.cc
++++ b/engine/src/flutter/impeller/tessellator/path_tessellator.cc
+@@ -196,19 +196,19 @@ class StorageCounter : public SegmentReceiver {
+ 
+   void RecordQuad(Point p1, Point cp, Point p2) override {
+     size_t count =  //
+-        std::ceilf(ComputeQuadradicSubdivisions(scale_, p1, cp, p2));
++        std::ceil(ComputeQuadradicSubdivisions(scale_, p1, cp, p2));
+     point_count_ += std::max<size_t>(count, 1);
+   }
+ 
+   void RecordConic(Point p1, Point cp, Point p2, Scalar weight) override {
+     size_t count =  //
+-        std::ceilf(ComputeConicSubdivisions(scale_, p1, cp, p2, weight));
++        std::ceil(ComputeConicSubdivisions(scale_, p1, cp, p2, weight));
+     point_count_ += std::max<size_t>(count, 1);
+   }
+ 
+   void RecordCubic(Point p1, Point cp1, Point cp2, Point p2) override {
+     size_t count =  //
+-        std::ceilf(ComputeCubicSubdivisions(scale_, p1, cp1, cp2, p2));
++        std::ceil(ComputeCubicSubdivisions(scale_, p1, cp1, cp2, p2));
+     point_count_ += std::max<size_t>(count, 1);
+   }
+ 
+@@ -241,7 +241,7 @@ class PathFillWriter : public SegmentReceiver {
+ 
+   void RecordQuad(Point p1, Point cp, Point p2) override {
+     Quad quad{p1, cp, p2};
+-    Scalar count = std::ceilf(ComputeQuadradicSubdivisions(scale_, p1, cp, p2));
++    Scalar count = std::ceil(ComputeQuadradicSubdivisions(scale_, p1, cp, p2));
+     for (size_t i = 1; i < count; i++) {
+       writer_.Write(quad.Solve(i / count));
+     }
+@@ -251,7 +251,7 @@ class PathFillWriter : public SegmentReceiver {
+   void RecordConic(Point p1, Point cp, Point p2, Scalar weight) override {
+     Conic conic{p1, cp, p2, weight};
+     Scalar count =
+-        std::ceilf(ComputeConicSubdivisions(scale_, p1, cp, p2, weight));
++        std::ceil(ComputeConicSubdivisions(scale_, p1, cp, p2, weight));
+     for (size_t i = 1; i < count; i++) {
+       writer_.Write(conic.Solve(i / count));
+     }
+@@ -261,7 +261,7 @@ class PathFillWriter : public SegmentReceiver {
+   void RecordCubic(Point p1, Point cp1, Point cp2, Point p2) override {
+     Cubic cubic{p1, cp1, cp2, p2};
+     Scalar count =
+-        std::ceilf(ComputeCubicSubdivisions(scale_, p1, cp1, cp2, p2));
++        std::ceil(ComputeCubicSubdivisions(scale_, p1, cp1, cp2, p2));
+     for (size_t i = 1; i < count; i++) {
+       writer_.Write(cubic.Solve(i / count));
+     }
+diff --git a/engine/src/flutter/impeller/toolkit/glvk/trampoline.cc b/engine/src/flutter/impeller/toolkit/glvk/trampoline.cc
+index 257bd1f48e9..dac1d08a1df 100644
+--- a/engine/src/flutter/impeller/toolkit/glvk/trampoline.cc
++++ b/engine/src/flutter/impeller/toolkit/glvk/trampoline.cc
+@@ -5,6 +5,7 @@
+ #include "impeller/toolkit/glvk/trampoline.h"
+ 
+ #include <array>
++#include <cstring>
+ 
+ #include "flutter/fml/closure.h"
+ #include "flutter/fml/trace_event.h"
+diff --git a/engine/src/flutter/lib/gpu/BUILD.gn b/engine/src/flutter/lib/gpu/BUILD.gn
+index 9436f548977..dc3893d5600 100644
+--- a/engine/src/flutter/lib/gpu/BUILD.gn
++++ b/engine/src/flutter/lib/gpu/BUILD.gn
+@@ -7,15 +7,19 @@ import("//flutter/impeller/tools/impeller.gni")
+ import("//flutter/testing/testing.gni")
+ 
+ source_set("gpu") {
+-  cflags = [
+-    # Dart gives us doubles. Skia and Impeller work in floats.
+-    # If Dart gives us a double > FLT_MAX or < -FLT_MAX, implicit conversion
+-    # will convert it to either inf/-inf or FLT_MAX/-FLT_MAX (undefined
+-    # behavior). This can result in surprising and difficult to debug behavior
+-    # for Flutter application developers, so it should be explicitly handled
+-    # via SafeNarrow.
+-    "-Wimplicit-float-conversion",
+-  ]
++  cflags = []
++
++  if (is_clang) {
++    cflags += [
++      # Dart gives us doubles. Skia and Impeller work in floats.
++      # If Dart gives us a double > FLT_MAX or < -FLT_MAX, implicit conversion
++      # will convert it to either inf/-inf or FLT_MAX/-FLT_MAX (undefined
++      # behavior). This can result in surprising and difficult to debug behavior
++      # for Flutter application developers, so it should be explicitly handled
++      # via SafeNarrow.
++      "-Wimplicit-float-conversion",
++    ]
++  }
+ 
+   if (is_win) {
+     # This causes build failures in third_party dependencies on Windows.
+diff --git a/engine/src/flutter/lib/ui/BUILD.gn b/engine/src/flutter/lib/ui/BUILD.gn
+index 6ed8db4f6e4..cee61b494c9 100644
+--- a/engine/src/flutter/lib/ui/BUILD.gn
++++ b/engine/src/flutter/lib/ui/BUILD.gn
+@@ -12,15 +12,19 @@ if (is_fuchsia) {
+ }
+ 
+ source_set("ui") {
+-  cflags = [
+-    # Dart gives us doubles. Skia and Impeller work in floats.
+-    # If Dart gives us a double > FLT_MAX or < -FLT_MAX, implicit conversion
+-    # will convert it to either inf/-inf or FLT_MAX/-FLT_MAX (undefined
+-    # behavior). This can result in surprising and difficult to debug behavior
+-    # for Flutter application developers, so it should be explicitly handled
+-    # via SafeNarrow.
+-    "-Wimplicit-float-conversion",
+-  ]
++  cflags = []
++
++  if (is_clang) {
++    cflags += [
++      # Dart gives us doubles. Skia and Impeller work in floats.
++      # If Dart gives us a double > FLT_MAX or < -FLT_MAX, implicit conversion
++      # will convert it to either inf/-inf or FLT_MAX/-FLT_MAX (undefined
++      # behavior). This can result in surprising and difficult to debug behavior
++      # for Flutter application developers, so it should be explicitly handled
++      # via SafeNarrow.
++      "-Wimplicit-float-conversion",
++    ]
++  }
+ 
+   if (is_win) {
+     # This causes build failures in third_party dependencies on Windows.
+diff --git a/engine/src/flutter/lib/ui/painting/image_generator_apng.h b/engine/src/flutter/lib/ui/painting/image_generator_apng.h
+index d35f9cb9ec2..d7a13aeedc9 100644
+--- a/engine/src/flutter/lib/ui/painting/image_generator_apng.h
++++ b/engine/src/flutter/lib/ui/painting/image_generator_apng.h
+@@ -15,7 +15,7 @@
+   T name;                                 \
+                                           \
+  public:                                  \
+-  T get_##name() const {                  \
++  constexpr T get_##name() const {        \
+     return fml::BigEndianToArch<T>(name); \
+   }                                       \
+   void set_##name(T n) {                  \
+diff --git a/engine/src/flutter/shell/platform/embedder/embedder_surface.cc b/engine/src/flutter/shell/platform/embedder/embedder_surface.cc
+index 029833f7434..4451fa67fa7 100644
+--- a/engine/src/flutter/shell/platform/embedder/embedder_surface.cc
++++ b/engine/src/flutter/shell/platform/embedder/embedder_surface.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "flutter/shell/platform/embedder/embedder_surface.h"
+ 
++#include "third_party/skia/include/gpu/ganesh/GrDirectContext.h"
++
+ namespace flutter {
+ 
+ EmbedderSurface::EmbedderSurface() = default;
+diff --git a/engine/src/flutter/shell/testing/BUILD.gn b/engine/src/flutter/shell/testing/BUILD.gn
+index f97ae91ae83..cd539c5e57a 100644
+--- a/engine/src/flutter/shell/testing/BUILD.gn
++++ b/engine/src/flutter/shell/testing/BUILD.gn
+@@ -19,7 +19,7 @@ group("testing") {
+ shell_gpu_configuration("tester_gpu_configuration") {
+   enable_software = true
+   enable_gl = false
+-  enable_vulkan = true
++  enable_vulkan = shell_enable_vulkan && impeller_enable_vulkan
+   enable_metal = shell_enable_metal
+ }
+ 
+@@ -96,14 +96,16 @@ tester("flutter_tester") {
+ 
+   if (impeller_supports_rendering) {
+     configs = [ ":tester_gpu_configuration_config" ]
+-    sources = [ "tester_context_vk_factory.cc" ]
++    deps = [ ":tester_gpu_configuration" ]
++    if (shell_enable_vulkan && impeller_enable_vulkan) {
++      sources = [ "tester_context_vk_factory.cc" ]
++      deps += [
++        "//flutter/third_party/swiftshader/src/Vulkan:swiftshader_libvulkan_static",
++      ]
++    }
+     if (shell_enable_metal) {
+       sources += [ "tester_context_mtl_factory.mm" ]
+     }
+-    deps = [
+-      ":tester_gpu_configuration",
+-      "//flutter/third_party/swiftshader/src/Vulkan:swiftshader_libvulkan_static",
+-    ]
+   }
+ 
+   metadata = {
+diff --git a/engine/src/flutter/skia/modules/skcms/BUILD.gn b/engine/src/flutter/skia/modules/skcms/BUILD.gn
+index b9734c2485d..572f5b8d372 100644
+--- a/engine/src/flutter/skia/modules/skcms/BUILD.gn
++++ b/engine/src/flutter/skia/modules/skcms/BUILD.gn
+@@ -48,7 +48,6 @@ arch("skcms_TransformHsw") {
+     cflags = [
+       "-mavx2",
+       "-mf16c",
+-      "-std=c11",
+     ]
+   }
+ }
+@@ -76,16 +75,12 @@ arch("skcms_TransformSkx") {
+       "-mavx512cd",
+       "-mavx512bw",
+       "-mavx512vl",
+-      "-std=c11",
+     ]
+   }
+ }
+ 
+ static_library("skcms") {
+   cflags = []
+-  if (!is_win || is_clang) {
+-    cflags += [ "-std=c11" ]
+-  }
+   if (target_cpu != "x64" || target_os == "android") {
+     defines = [
+       "SKCMS_DISABLE_HSW",
+diff --git a/engine/src/flutter/vulkan/vulkan_application.cc b/engine/src/flutter/vulkan/vulkan_application.cc
+index d9db63c9968..bcad35a9d2b 100644
+--- a/engine/src/flutter/vulkan/vulkan_application.cc
++++ b/engine/src/flutter/vulkan/vulkan_application.cc
+@@ -4,6 +4,7 @@
+ 
+ #include "vulkan_application.h"
+ 
++#include <cstring>
+ #include <utility>
+ #include <vector>
+ 
+diff --git a/packages/flutter_tools/lib/src/build_system/targets/linux.dart b/packages/flutter_tools/lib/src/build_system/targets/linux.dart
+index 7bf43e52914..20da2cc1545 100644
+--- a/packages/flutter_tools/lib/src/build_system/targets/linux.dart
++++ b/packages/flutter_tools/lib/src/build_system/targets/linux.dart
+@@ -18,9 +18,17 @@ import 'desktop.dart';
+ import 'icon_tree_shaker.dart';
+ import 'native_assets.dart';
+ 
+-/// The only files/subdirectories we care out.
++/// The required files/subdirectories copied from the Linux engine cache.
+ const _kLinuxArtifacts = <String>['libflutter_linux_gtk.so'];
+ 
++/// Optional runtime libraries shipped by self-contained Linux engine caches.
++const _kLinuxBundledRuntimeArtifacts = <String>[
++  'libstdc++.so',
++  'libstdc++.so.6',
++  'libgcc_s.so',
++  'libgcc_s.so.1',
++];
++
+ const _kLinuxDepfile = 'linux_engine_sources.d';
+ 
+ /// Copies the Linux desktop embedding files to the copy directory.
+@@ -63,6 +71,14 @@ class UnpackLinux extends Target {
+       mode: buildMode,
+       platform: targetPlatform,
+     );
++    final artifacts = <String>[..._kLinuxArtifacts];
++    for (final String runtimeArtifact in _kLinuxBundledRuntimeArtifacts) {
++      if (environment.fileSystem.file(
++        environment.fileSystem.path.join(engineSourcePath, runtimeArtifact),
++      ).existsSync()) {
++        artifacts.add(runtimeArtifact);
++      }
++    }
+     final Directory outputDirectory = environment.fileSystem.directory(
+       environment.fileSystem.path.join(
+         environment.projectDir.path,
+@@ -75,7 +91,7 @@ class UnpackLinux extends Target {
+       fileSystem: environment.fileSystem,
+       engineSourcePath: engineSourcePath,
+       outputDirectory: outputDirectory,
+-      artifacts: _kLinuxArtifacts,
++      artifacts: artifacts,
+       clientSourcePaths: <String>[headersPath],
+       icuDataPath: environment.artifacts.getArtifactPath(
+         Artifact.icuData,
+diff --git a/packages/flutter_tools/lib/src/migrations/cmake_native_assets_migration.dart b/packages/flutter_tools/lib/src/migrations/cmake_native_assets_migration.dart
+index f32d2320d28..1c8e97bd96d 100644
+--- a/packages/flutter_tools/lib/src/migrations/cmake_native_assets_migration.dart
++++ b/packages/flutter_tools/lib/src/migrations/cmake_native_assets_migration.dart
+@@ -11,9 +11,11 @@ import '../cmake_project.dart';
+ /// ```cmake
+ /// # Copy the native assets provided by the build.dart from all packages.
+ /// set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/linux/")
+-/// install(DIRECTORY "${NATIVE_ASSETS_DIR}"
+-///    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+-///    COMPONENT Runtime)
++/// if(EXISTS "${NATIVE_ASSETS_DIR}")
++///   install(DIRECTORY "${NATIVE_ASSETS_DIR}"
++///     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
++///     COMPONENT Runtime)
++/// endif()
+ /// ```
+ class CmakeNativeAssetsMigration extends ProjectMigrator {
+   CmakeNativeAssetsMigration(CmakeBasedProject project, this.os, super.logger)
+@@ -41,21 +43,27 @@ class CmakeNativeAssetsMigration extends ProjectMigrator {
+ 
+ # Copy the native assets provided by the build.dart from all packages.
+ set(NATIVE_ASSETS_DIR "\${PROJECT_BUILD_DIR}native_assets/$os/")
+-install(DIRECTORY "\${NATIVE_ASSETS_DIR}"
+-  DESTINATION "\${INSTALL_BUNDLE_LIB_DIR}"
+-  COMPONENT Runtime)
++if(EXISTS "\${NATIVE_ASSETS_DIR}" AND INSTALL_BUNDLE_LIB_DIR)
++  install(DIRECTORY "\${NATIVE_ASSETS_DIR}"
++    DESTINATION "\${INSTALL_BUNDLE_LIB_DIR}"
++    COMPONENT Runtime)
++endif()
+ ''';
+ 
+     // Insert the new command after the bundled libraries loop.
+-    const bundleLibrariesCommandEnd = r'''
++    const bundleLibrariesCommand = r'''
++foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
++  install(FILES "${bundled_library}"
++    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
++    COMPONENT Runtime)
+ endforeach(bundled_library)
+ ''';
+ 
+     var newProjectContents = originalProjectContents;
+ 
+     newProjectContents = originalProjectContents.replaceFirst(
+-      bundleLibrariesCommandEnd,
+-      '$bundleLibrariesCommandEnd$copyNativeAssetsCommand',
++      bundleLibrariesCommand,
++      '$bundleLibrariesCommand$copyNativeAssetsCommand',
+     );
+ 
+     if (originalProjectContents != newProjectContents) {
+diff --git a/packages/flutter_tools/templates/app/linux.tmpl/CMakeLists.txt.tmpl b/packages/flutter_tools/templates/app/linux.tmpl/CMakeLists.txt.tmpl
+index f710aa3d4ef..b8b0f0fabc0 100644
+--- a/packages/flutter_tools/templates/app/linux.tmpl/CMakeLists.txt.tmpl
++++ b/packages/flutter_tools/templates/app/linux.tmpl/CMakeLists.txt.tmpl
+@@ -104,6 +104,12 @@ install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}
+ install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+   COMPONENT Runtime)
+ 
++foreach(flutter_bundled_library ${FLUTTER_BUNDLED_LIBRARIES})
++  install(FILES "${flutter_bundled_library}"
++    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
++    COMPONENT Runtime)
++endforeach(flutter_bundled_library)
++
+ foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
+   install(FILES "${bundled_library}"
+     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+@@ -112,9 +118,11 @@ endforeach(bundled_library)
+ 
+ # Copy the native assets provided by the build.dart from all packages.
+ set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/linux/")
+-install(DIRECTORY "${NATIVE_ASSETS_DIR}"
+-   DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+-   COMPONENT Runtime)
++if(EXISTS "${NATIVE_ASSETS_DIR}")
++  install(DIRECTORY "${NATIVE_ASSETS_DIR}"
++    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
++    COMPONENT Runtime)
++endif()
+ 
+ # Fully re-copy the assets directory on each build to avoid having stale files
+ # from a previous install.
+diff --git a/packages/flutter_tools/templates/app/linux.tmpl/flutter/CMakeLists.txt b/packages/flutter_tools/templates/app/linux.tmpl/flutter/CMakeLists.txt
+index d5bd01648a9..2ac2d24f8a7 100644
+--- a/packages/flutter_tools/templates/app/linux.tmpl/flutter/CMakeLists.txt
++++ b/packages/flutter_tools/templates/app/linux.tmpl/flutter/CMakeLists.txt
+@@ -27,9 +27,22 @@ pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0)
+ pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
+ 
+ set(FLUTTER_LIBRARY "${EPHEMERAL_DIR}/libflutter_linux_gtk.so")
++set(FLUTTER_BUNDLED_LIBRARIES "")
++foreach(flutter_runtime_library
++  "libstdc++.so"
++  "libstdc++.so.6"
++  "libgcc_s.so"
++  "libgcc_s.so.1"
++)
++  set(flutter_runtime_library_path "${EPHEMERAL_DIR}/${flutter_runtime_library}")
++  if(FLUTTER_TARGET_PLATFORM STREQUAL "linux-loong64" OR EXISTS "${flutter_runtime_library_path}")
++    list(APPEND FLUTTER_BUNDLED_LIBRARIES "${flutter_runtime_library_path}")
++  endif()
++endforeach(flutter_runtime_library)
+ 
+ # Published to parent scope for install step.
+ set(FLUTTER_LIBRARY ${FLUTTER_LIBRARY} PARENT_SCOPE)
++set(FLUTTER_BUNDLED_LIBRARIES ${FLUTTER_BUNDLED_LIBRARIES} PARENT_SCOPE)
+ set(FLUTTER_ICU_DATA_FILE "${EPHEMERAL_DIR}/icudtl.dat" PARENT_SCOPE)
+ set(PROJECT_BUILD_DIR "${PROJECT_DIR}/build/" PARENT_SCOPE)
+ set(AOT_LIBRARY "${PROJECT_DIR}/build/lib/libapp.so" PARENT_SCOPE)
+@@ -62,6 +75,9 @@ target_include_directories(flutter INTERFACE
+   "${EPHEMERAL_DIR}"
+ )
+ target_link_libraries(flutter INTERFACE "${FLUTTER_LIBRARY}")
++if(FLUTTER_BUNDLED_LIBRARIES)
++  target_link_libraries(flutter INTERFACE ${FLUTTER_BUNDLED_LIBRARIES})
++endif()
+ target_link_libraries(flutter INTERFACE
+   PkgConfig::GTK
+   PkgConfig::GLIB
+@@ -75,6 +91,7 @@ add_dependencies(flutter flutter_assemble)
+ # flutter tool.
+ add_custom_command(
+   OUTPUT ${FLUTTER_LIBRARY} ${FLUTTER_LIBRARY_HEADERS}
++    ${FLUTTER_BUNDLED_LIBRARIES}
+     ${CMAKE_CURRENT_BINARY_DIR}/_phony_
+   COMMAND ${CMAKE_COMMAND} -E env
+     ${FLUTTER_TOOL_ENVIRONMENT}
+@@ -85,4 +102,5 @@ add_custom_command(
+ add_custom_target(flutter_assemble DEPENDS
+   "${FLUTTER_LIBRARY}"
+   ${FLUTTER_LIBRARY_HEADERS}
++  ${FLUTTER_BUNDLED_LIBRARIES}
+ )
+diff --git a/packages/flutter_tools/test/general.shard/migrations/cmake_project_migration_test.dart b/packages/flutter_tools/test/general.shard/migrations/cmake_project_migration_test.dart
+index 12c2e5a1879..daefa7ff98d 100644
+--- a/packages/flutter_tools/test/general.shard/migrations/cmake_project_migration_test.dart
++++ b/packages/flutter_tools/test/general.shard/migrations/cmake_project_migration_test.dart
+@@ -262,9 +262,11 @@ endforeach(bundled_library)
+ 
+ # Copy the native assets provided by the build.dart from all packages.
+ set(NATIVE_ASSETS_DIR "\${PROJECT_BUILD_DIR}native_assets/$os/")
+-install(DIRECTORY "\${NATIVE_ASSETS_DIR}"
+-  DESTINATION "\${INSTALL_BUNDLE_LIB_DIR}"
+-  COMPONENT Runtime)
++if(EXISTS "\${NATIVE_ASSETS_DIR}" AND INSTALL_BUNDLE_LIB_DIR)
++  install(DIRECTORY "\${NATIVE_ASSETS_DIR}"
++    DESTINATION "\${INSTALL_BUNDLE_LIB_DIR}"
++    COMPONENT Runtime)
++endif()
+ 
+ # Fully re-copy the assets directory on each build to avoid having stale files
+ # from a previous install.

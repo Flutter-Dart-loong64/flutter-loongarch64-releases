@@ -1,60 +1,53 @@
 # Old-World LoongArch64 Flutter Bring-Up
 
-This document records the old-world LoongArch64 Flutter SDK bring-up path used
-for the `v3.45.0-1.0.pre-198` release.
+This document records the old-world LoongArch64 route used for the current UOS
+20 SDK release.
 
 ## Target
 
-- Architecture: old-world `loongarch64`
-- ABI family: ABI1.0 old-world
+- Architecture reported by system: `loongarch64`
+- ABI family: old-world ABI
 - Dynamic linker: `/lib64/ld.so.1`
-- Validated system: UOS Desktop 20 Professional
-- Flutter target platform name used by the tool: `linux-loong64`
+- Flutter target platform name: `linux-loong64`
+- Current SDK version: `3.46.0-1.0.pre-328`
 
-Old-world and new-world LoongArch binaries are not compatible. New-world
-systems normally use `/lib64/ld-linux-loongarch-lp64d.so.1`; old-world systems
-use `/lib64/ld.so.1`.
+Old-world and new-world LoongArch binaries are not compatible. New-world systems
+normally use `/lib64/ld-linux-loongarch-lp64d.so.1`; old-world systems use
+`/lib64/ld.so.1`.
 
-## Source Layout
+## Toolchain
 
-Use separate checkouts for the framework, engine, Dart SDK, and native support
-forks. The release package is assembled from the Flutter framework checkout
-after the engine and Dart SDK artifacts have been copied into `bin/cache`.
+The validated route used:
 
-The Flutter framework `.git` directory must stay in the release archive. The
-Flutter tool reads it for channel, version, and feature checks.
+- GCC 13.4 old-world toolchain
+- binutils 2.42 old-world toolchain
 
-## Toolchain Notes
-
-The old-world UOS 20 system linker was not sufficient for the final GTK engine
-shared library. It left unresolved `R_LARCH_B26` branches in constructors, which
-showed up as `b 0` or `bl 0` self-branches and caused `libflutter_linux_gtk.so`
-initialization to hang.
-
-The validated rebuild used an old-world GCC 13.4 driver with binutils 2.42 for
-the final link. After rebuilding, `readelf -rW libflutter_linux_gtk.so` reported
-no dynamic `R_LARCH_B26` leftovers.
+The old system linker left unresolved `R_LARCH_B26` branches in some Flutter
+engine shared-library constructors. Rebuilding with the newer old-world
+GCC/binutils pair removed those dynamic branch relocations.
 
 ## Patch Scope
 
-The patch in `patches/oldworld-loongarch64-engine.patch` covers:
+`patches/oldworld-loongarch64-support.patch` covers:
 
-- GCC build compatibility where upstream build files assume Clang warnings or
-  Clang-only options.
-- static GCC runtime linkage for engine shared libraries.
-- old-world LoongArch builds without relying on LSX/LASX-only source paths.
+- GCC build compatibility where upstream assumes Clang warnings or Clang-only
+  flags.
+- old-world LoongArch builds without relying on LSX/LASX compiler flags that
+  are not available in the target toolchain.
 - missing standard includes exposed by GCC.
+- Vulkan/SwiftShader/ANGLE build fixes needed by the old-world compiler.
 - Linux GTK engine artifact plumbing for `linux-loong64`.
-- current `dart:ui` ABI compatibility needed by the Flutter framework:
-  viewport metrics, application locale, semantics tree enablement, view-aware
-  semantics updates, native semantics flags, and view focus requests.
+- Flutter tool support for optional bundled Linux runtime libraries.
+- Linux CMake template support for linking and installing bundled runtime
+  libraries.
+- guarded native assets install migration for projects without native assets.
 
-## Configure
+## Engine Build
+
+The final SDK includes debug, profile, and release Linux GTK engine artifacts.
+Release was configured with fontconfig enabled and Vulkan disabled:
 
 ```bash
-cd engine/src
-patch -p1 < /path/to/flutter-loongarch64-releases/patches/oldworld-loongarch64-engine.patch
-
 python3 ./flutter/tools/gn \
   --linux \
   --linux-cpu loong64 \
@@ -69,65 +62,93 @@ python3 ./flutter/tools/gn \
   --gn-args='is_qnx=false system_libdir="lib/loongarch64-linux-gnu" skia_use_vulkan=false shell_enable_vulkan=false impeller_enable_vulkan=false test_enable_vulkan=false glfw_vulkan_library=""'
 ```
 
-## Build
+The same configuration pattern was used for debug and profile with matching
+target directories.
 
-```bash
-ninja -C out/linux_release_loong64_gtk_oldworld \
-  gen_snapshot \
-  libflutter_linux_gtk.so \
-  libflutter_engine.so \
-  zip_archives/linux-loong64-release/linux-loong64-flutter-gtk.zip \
-  zip_archives/linux-loong64-release/artifacts.zip \
-  zip_archives/linux-loong64/font-subset.zip
+## SDK Runtime Libraries
+
+The old-world engine is linked with GCC 13.4 C++ runtime symbols that are newer
+than the system `libstdc++` on UOS 20. The SDK therefore ships GCC runtime
+libraries through the Flutter engine cache.
+
+Each Linux engine cache directory contains:
+
+- `libstdc++.so`
+- `libstdc++.so.6`
+- `libgcc_s.so`
+- `libgcc_s.so.1`
+
+The unversioned files are used by the app link step. The versioned files are
+loaded at runtime from the app bundle.
+
+## Flutter Tool Changes
+
+The Linux unpack target copies optional bundled runtime libraries from the
+engine cache into `linux/flutter/ephemeral`.
+
+The Linux CMake template does three things for `linux-loong64`:
+
+- declares bundled runtime libraries as `flutter_assemble` outputs.
+- links the GTK runner against those libraries from the ephemeral directory.
+- installs the libraries into the app bundle `lib/` directory.
+
+The installed executable uses:
+
+```text
+RUNPATH $ORIGIN/lib
 ```
 
-If the system linker leaves branch relocations unresolved, use an old-world
-GCC/binutils wrapper for the final Ninja invocation:
+This makes the app prefer the bundled old-world GCC runtime at startup.
+
+## Validation
+
+The current SDK was validated with a generated Linux desktop app:
 
 ```bash
-export PATH=/path/to/oldworld-gcc-binutils-wrapper:$PATH
-ninja -C out/linux_release_loong64_gtk_oldworld libflutter_linux_gtk.so
+flutter create --platforms=linux smoke_app
+cd smoke_app
+flutter build linux --release --target-platform linux-loong64 --no-version-check
 ```
 
-## Assemble SDK
+Verified build stages:
 
-```bash
-out=/path/to/engine/src/out/linux_release_loong64_gtk_oldworld
-cache=/path/to/flutter/bin/cache/artifacts/engine
+- Flutter tool snapshot rebuild
+- Dart pub dependency resolution
+- `gen_snapshot` AOT output
+- `impellerc` shader compilation
+- GTK runner CMake configure
+- Ninja build and install
+- app bundle generation
 
-for mode in linux-loong64 linux-loong64-profile linux-loong64-release; do
-  mkdir -p "$cache/$mode"
-  cp "$out/libflutter_linux_gtk.so" "$cache/$mode/libflutter_linux_gtk.so"
-  cp "$out/gen_snapshot" "$cache/$mode/gen_snapshot"
-  cp "$out/icudtl.dat" "$cache/$mode/icudtl.dat"
-done
+Verified bundle files:
+
+- `flutter_oldworld_smoke`
+- `lib/libflutter_linux_gtk.so`
+- `lib/libapp.so`
+- `lib/libstdc++.so`
+- `lib/libstdc++.so.6`
+- `lib/libgcc_s.so`
+- `lib/libgcc_s.so.1`
+
+The bundle executable reported:
+
+```text
+RUNPATH Library runpath: [$ORIGIN/lib]
 ```
-
-## Runtime Fixes Verified
-
-The rebuilt engine fixed these old-world startup failures:
-
-- GTK process stuck during `libflutter_linux_gtk.so` initialization because of
-  unresolved branch relocations.
-- 10x10 placeholder window with no rendered Flutter UI.
-- unresolved `dart:ui` native functions:
-  - `NativeSemanticsFlags::initSemanticsFlags`
-  - `PlatformConfigurationNativeApi::RequestViewFocusChange`
-- semantics update signature mismatch between the framework and engine.
-
-Validation with `flutter-linglong-store` on old-world UOS 20:
-
-- process stays alive after launch.
-- `xwininfo` reports the main `玲珑应用商店社区版` window at `1280x800`.
-- log contains no unresolved native function, `std::system_error`, or startup
-  termination.
-- remaining GLib/XDG desktop portal settings warnings do not block the GUI.
 
 ## Package
 
-```bash
-cd /path/to/flutter-parent
-tar -czf flutter-3.45.0-1.0.pre-198-loongarch64-oldworld-uos20.tar.gz flutter
-sha256sum flutter-3.45.0-1.0.pre-198-loongarch64-oldworld-uos20.tar.gz \
-  > flutter-3.45.0-1.0.pre-198-loongarch64-oldworld-uos20.tar.gz.sha256
+Current package:
+
+```text
+flutter-3.46.0-1.0.pre-328-loongarch64-oldworld-uos20.tar.gz
 ```
+
+SHA256:
+
+```text
+12cdf2588d9753e2392101eb61740395faaa66a66c731a95a143eea926d49ad7
+```
+
+The package keeps the Flutter `.git` metadata so the Flutter tool can report
+version and channel information correctly.
