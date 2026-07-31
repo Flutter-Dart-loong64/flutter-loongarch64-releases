@@ -37,9 +37,9 @@ GCC/binutils pair removed those dynamic branch relocations.
 - missing standard includes exposed by GCC.
 - Vulkan/SwiftShader/ANGLE build fixes needed by the old-world compiler.
 - Linux GTK engine artifact plumbing for `linux-loong64`.
-- Flutter tool support for optional bundled Linux runtime libraries.
-- Linux CMake template support for linking and installing bundled runtime
-  libraries.
+- static GCC C++ runtime linking for old-world Loong64 Engine targets.
+- optional Flutter tool and Linux CMake handling for runtime libraries that are
+  actually present in an engine cache.
 - guarded native assets install migration for projects without native assets.
 
 ## Engine Build
@@ -67,30 +67,26 @@ target directories.
 
 ## SDK Runtime Libraries
 
-The old-world engine is linked with GCC 13.4 C++ runtime symbols that are newer
-than the system `libstdc++` on UOS 20. The SDK therefore ships GCC runtime
-libraries through the Flutter engine cache.
+The Engine requires GCC 13.4 language and library support, while UOS 20 ships an
+older system `libstdc++` used by its LoongGPU user-space driver. Loading the GCC
+13.4 shared `libstdc++` process-wide causes `gsgpu_dri.so` and
+`libloong-gpucomp.so.1` to fail during initialization.
 
-Each Linux engine cache directory contains:
+Old-world Engine binaries are therefore linked with `-static-libstdc++` and
+`-static-libgcc`. The Engine export map keeps those implementations private.
+`libflutter_linux_gtk.so`, `gen_snapshot`, `impellerc`, and the other packaged
+Engine tools have no dynamic `libstdc++.so.6` dependency.
 
-- `libstdc++.so`
-- `libstdc++.so.6`
-- `libgcc_s.so`
-- `libgcc_s.so.1`
-
-The unversioned files are used by the app link step. The versioned files are
-loaded at runtime from the app bundle.
+The Flutter engine cache and generated application bundles do not contain
+`libstdc++.so*` or `libgcc_s.so*`. The GTK runner uses the UOS 20 system
+libraries, preserving compatibility with the system LoongGPU stack.
 
 ## Flutter Tool Changes
 
-The Linux unpack target copies optional bundled runtime libraries from the
-engine cache into `linux/flutter/ephemeral`.
-
-The Linux CMake template does three things for `linux-loong64`:
-
-- declares bundled runtime libraries as `flutter_assemble` outputs.
-- links the GTK runner against those libraries from the ephemeral directory.
-- installs the libraries into the app bundle `lib/` directory.
+The Linux unpack target and CMake template retain optional support for runtime
+libraries supplied by another self-contained engine cache. Files are copied,
+linked, and installed only when they actually exist. `linux-loong64` no longer
+forces absent runtime files into the build graph.
 
 The installed executable uses:
 
@@ -98,7 +94,8 @@ The installed executable uses:
 RUNPATH $ORIGIN/lib
 ```
 
-This makes the app prefer the bundled old-world GCC runtime at startup.
+The RUNPATH locates `libflutter_linux_gtk.so` in the application bundle. With
+no bundled GCC runtime, `libstdc++` and `libgcc_s` resolve from UOS 20.
 
 ## Validation
 
@@ -107,6 +104,8 @@ The current SDK was validated with a generated Linux desktop app:
 ```bash
 flutter create --platforms=linux smoke_app
 cd smoke_app
+flutter build linux --debug --target-platform linux-loong64 --no-version-check
+flutter build linux --profile --target-platform linux-loong64 --no-version-check
 flutter build linux --release --target-platform linux-loong64 --no-version-check
 ```
 
@@ -114,27 +113,29 @@ Verified build stages:
 
 - Flutter tool snapshot rebuild
 - Dart pub dependency resolution
+- patched SDK generation matching the packaged Dart Kernel format
 - `gen_snapshot` AOT output
 - `impellerc` shader compilation
 - GTK runner CMake configure
 - Ninja build and install
 - app bundle generation
+- debug, profile, and release startup on a real UOS 20 X11 LoongGPU session
 
 Verified bundle files:
 
 - `flutter_oldworld_smoke`
 - `lib/libflutter_linux_gtk.so`
 - `lib/libapp.so`
-- `lib/libstdc++.so`
-- `lib/libstdc++.so.6`
-- `lib/libgcc_s.so`
-- `lib/libgcc_s.so.1`
 
 The bundle executable reported:
 
 ```text
 RUNPATH Library runpath: [$ORIGIN/lib]
 ```
+
+`ldd` resolves the runner's `libstdc++.so.6` and `libgcc_s.so.1` from the UOS
+20 system. A 1280x720 GTK window was observed during the release-mode LoongGPU
+startup test.
 
 ## Package
 
@@ -147,7 +148,7 @@ flutter-3.46.0-1.0.pre-328-loongarch64-oldworld-uos20.tar.gz
 SHA256:
 
 ```text
-12cdf2588d9753e2392101eb61740395faaa66a66c731a95a143eea926d49ad7
+c1d58dcd8a5e7f682f6ed754ec2d5d54bd87cd4b4c46287f68c0088640c13d5c
 ```
 
 The package keeps the Flutter `.git` metadata so the Flutter tool can report

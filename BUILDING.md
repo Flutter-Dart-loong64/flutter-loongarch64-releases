@@ -99,23 +99,34 @@ Build profile and debug archives as well. The SDK cache should contain:
 
 ## SDK Assembly
 
-Copy the engine zips and tools into Flutter's cache. Then copy the old-world GCC
-runtime libraries into each Linux engine cache directory:
+Copy the debug, profile, and release engine zips and tools into Flutter's cache.
+Also build and extract `zip_archives/flutter_patched_sdk.zip` from the debug
+output so its Kernel format matches the packaged Dart SDK.
+
+Do not copy GCC shared runtime libraries into the engine cache. Confirm that the
+Engine and tools contain the GCC 13.4 runtime statically:
 
 ```bash
-cache=/path/to/flutter/bin/cache/artifacts/engine
-gcc_lib=/path/to/gcc-13.4/lib64
-
-for mode in linux-loong64 linux-loong64-profile linux-loong64-release; do
-  cp "$gcc_lib/libstdc++.so.6" "$cache/$mode/libstdc++.so.6"
-  cp "$gcc_lib/libstdc++.so.6" "$cache/$mode/libstdc++.so"
-  cp "$gcc_lib/libgcc_s.so.1" "$cache/$mode/libgcc_s.so.1"
-  cp "$gcc_lib/libgcc_s.so.1" "$cache/$mode/libgcc_s.so"
+for binary in \
+  out/linux_release_loong64_gtk_oldworld/libflutter_linux_gtk.so \
+  out/linux_release_loong64_gtk_oldworld/gen_snapshot \
+  out/linux_release_loong64_gtk_oldworld/impellerc; do
+  if readelf -d "$binary" | grep -q 'libstdc++.so'; then
+    echo "unexpected dynamic libstdc++ dependency: $binary" >&2
+    exit 1
+  fi
 done
 ```
 
-The unversioned names are needed for the link step. The versioned names are
-needed at runtime.
+Remove stale shared runtimes when updating an existing cache:
+
+```bash
+cache=flutter/bin/cache/artifacts/engine
+for mode in linux-loong64 linux-loong64-profile linux-loong64-release; do
+  rm -f "$cache/$mode"/libstdc++.so*
+  rm -f "$cache/$mode"/libgcc_s.so*
+done
+```
 
 Rebuild Flutter tool after changing Flutter tool sources:
 
@@ -158,11 +169,15 @@ readelf -d build/linux/loong64/release/bundle/smoke_app | grep RUNPATH
 Expected runtime libraries in the bundle:
 
 - `libflutter_linux_gtk.so`
-- `libstdc++.so`
-- `libstdc++.so.6`
-- `libgcc_s.so`
-- `libgcc_s.so.1`
 - `libapp.so`
+
+`libstdc++.so*` and `libgcc_s.so*` must not be present. Verify that the runner
+resolves them from the UOS 20 system:
+
+```bash
+ldd build/linux/loong64/release/bundle/smoke_app \
+  | grep -E 'libstdc\+\+|libgcc_s'
+```
 
 Expected RUNPATH:
 

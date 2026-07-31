@@ -10,28 +10,36 @@
 - Release asset:
   `flutter-3.46.0-1.0.pre-328-loongarch64-oldworld-uos20.tar.gz`
 - SHA256:
-  `12cdf2588d9753e2392101eb61740395faaa66a66c731a95a143eea926d49ad7`
+  `c1d58dcd8a5e7f682f6ed754ec2d5d54bd87cd4b4c46287f68c0088640c13d5c`
+- Rebuilt and replaced on `2026-07-31` after UOS 20 LoongGPU runtime
+  validation exposed a process-wide C++ runtime conflict in the original
+  archive.
 
 Validated:
 
 - `flutter --version --no-version-check`
 - `flutter create --platforms=linux`
+- `flutter build linux --debug --target-platform linux-loong64`
+- `flutter build linux --profile --target-platform linux-loong64`
 - `flutter build linux --release --target-platform linux-loong64`
 - AOT snapshot generation with old-world `gen_snapshot`
 - `impellerc` shader compilation
 - GTK runner link and install
 - bundle RUNPATH: `$ORIGIN/lib`
-- bundled runtime libraries:
-  `libstdc++.so`, `libstdc++.so.6`, `libgcc_s.so`, `libgcc_s.so.1`
+- debug, profile, and release startup on a real UOS 20 LoongGPU X11 session
+- release GTK window creation at 1280x720
+- system resolution of `libstdc++.so.6` and `libgcc_s.so.1`
 
 Changes:
 
 - Built debug, profile, and release Linux GTK engine artifacts.
-- Added old-world GCC 13.4 runtime libraries to the Flutter engine cache.
-- Taught Flutter tool's Linux unpack step to copy optional bundled runtime
-  libraries from the engine cache.
-- Updated the Linux CMake template to link and install bundled runtime
-  libraries for `linux-loong64`.
+- Linked the GCC 13.4 C++ runtime statically into old-world Engine binaries.
+- Removed shared GCC runtime libraries from the Flutter engine cache and
+  generated application bundles.
+- Kept optional runtime handling in Flutter tool and CMake, but only for files
+  that actually exist in the selected engine cache.
+- Regenerated `flutter_patched_sdk` with the packaged Dart SDK to replace the
+  stale Kernel format 130 artifact with Kernel format 136.
 - Guarded native assets install migration so projects without native assets do
   not fail during CMake install.
 

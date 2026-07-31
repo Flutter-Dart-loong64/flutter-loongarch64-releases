@@ -49,7 +49,7 @@ index 1c9dd231e40..41fd6858ee5 100644
    cflags_objcc = disable_modules_flags
  }
  
-@@ -674,8 +675,10 @@ config("runtime_library") {
+@@ -674,8 +675,15 @@ config("runtime_library") {
    # gen_snapshot) where this is not supported.
    if (is_linux) {
      if (!use_flutter_cxx) {
@@ -58,6 +58,11 @@ index 1c9dd231e40..41fd6858ee5 100644
 +      if (is_clang) {
 +        cflags_cc += [ "-stdlib=libstdc++" ]
 +        ldflags += [ "-stdlib=libstdc++" ]
++      } else if (current_cpu == "loong64") {
++        ldflags += [
++          "-static-libstdc++",
++          "-static-libgcc",
++        ]
 +      }
        libs += [ "gcc" ]
      }
@@ -753,7 +758,7 @@ index d5bd01648a9..2ac2d24f8a7 100644
 +  "libgcc_s.so.1"
 +)
 +  set(flutter_runtime_library_path "${EPHEMERAL_DIR}/${flutter_runtime_library}")
-+  if(FLUTTER_TARGET_PLATFORM STREQUAL "linux-loong64" OR EXISTS "${flutter_runtime_library_path}")
++  if(EXISTS "${flutter_runtime_library_path}")
 +    list(APPEND FLUTTER_BUNDLED_LIBRARIES "${flutter_runtime_library_path}")
 +  endif()
 +endforeach(flutter_runtime_library)

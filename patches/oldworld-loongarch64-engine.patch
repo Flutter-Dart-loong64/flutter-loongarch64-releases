@@ -29,7 +29,7 @@
 +      if (is_clang) {
 +        cflags_cc += [ "-stdlib=libstdc++" ]
 +        ldflags += [ "-stdlib=libstdc++" ]
-+      } else {
++      } else if (current_cpu == "loong64") {
 +        ldflags += [
 +          "-static-libstdc++",
 +          "-static-libgcc",

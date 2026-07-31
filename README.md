@@ -44,8 +44,9 @@ Use a directory that matches your own installation location.
   version, channel, and feature checks.
 - Linux desktop builds use `--target-platform linux-loong64`.
 - The SDK cache includes debug, profile, and release GTK engine artifacts.
-- The Linux template bundles GCC runtime libraries into desktop app bundles:
-  `libstdc++.so`, `libstdc++.so.6`, `libgcc_s.so`, and `libgcc_s.so.1`.
+- GCC 13.4 C++ support is linked statically into the old-world Engine. Generated
+  applications use the UOS 20 system `libstdc++` and `libgcc_s`, so proprietary
+  LoongGPU drivers are not forced into a newer process-wide C++ runtime.
 - Old-world `loongarch64` and new-world `loong64` binaries are not
   interchangeable.
 

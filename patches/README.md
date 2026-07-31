@@ -18,8 +18,9 @@ It covers:
 - `/lib64/ld.so.1` runtime compatibility.
 - LoongArch builds without LSX/LASX compiler flags.
 - missing standard includes and GCC warning fixes.
-- Flutter tool copying for bundled Linux runtime libraries.
-- Linux CMake linking and install support for bundled GCC runtime libraries.
+- static GCC 13.4 C++ runtime linking inside old-world Engine binaries.
+- optional Flutter tool and Linux CMake handling for self-contained runtime
+  libraries without forcing them into `linux-loong64` application bundles.
 - native assets install migration guard.
 
 ## Historical
